@@ -1,5 +1,5 @@
-import Foundation
 import CryptoKit
+import Foundation
 import Synchronization
 
 /// Handles encryption and decryption of the event queue
@@ -26,7 +26,7 @@ enum QueueEncryption {
                 kSecClass as String: kSecClassGenericPassword,
                 kSecAttrService as String: "com.luxardolabs.LuxAnalytics",
                 kSecAttrAccount as String: "EncryptionKey",
-                kSecReturnData as String: true
+                kSecReturnData as String: true,
             ]
 
             var result: AnyObject?
@@ -48,7 +48,7 @@ enum QueueEncryption {
                 kSecAttrService as String: "com.luxardolabs.LuxAnalytics",
                 kSecAttrAccount as String: "EncryptionKey",
                 kSecValueData as String: keyData,
-                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
             ]
 
             let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
@@ -61,11 +61,11 @@ enum QueueEncryption {
             return nil
         }
     }
-    
+
     /// Encrypt data
     static func encrypt(_ data: Data) -> Data? {
         guard let key = getOrCreateKey() else { return nil }
-        
+
         do {
             let sealedBox = try AES.GCM.seal(data, using: key)
             return sealedBox.combined
@@ -74,11 +74,11 @@ enum QueueEncryption {
             return nil
         }
     }
-    
+
     /// Decrypt data
     static func decrypt(_ data: Data) -> Data? {
         guard let key = getOrCreateKey() else { return nil }
-        
+
         do {
             let sealedBox = try AES.GCM.SealedBox(combined: data)
             return try AES.GCM.open(sealedBox, using: key)
@@ -87,13 +87,13 @@ enum QueueEncryption {
             return nil
         }
     }
-    
+
     /// Delete the encryption key (for testing or reset)
     static func deleteKey() {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "com.luxardolabs.LuxAnalytics",
-            kSecAttrAccount as String: "EncryptionKey"
+            kSecAttrAccount as String: "EncryptionKey",
         ]
 
         SecItemDelete(query as CFDictionary)

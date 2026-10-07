@@ -5,8 +5,8 @@ public enum LuxAnalyticsError: LocalizedError, Equatable, Sendable {
     public static func == (lhs: LuxAnalyticsError, rhs: LuxAnalyticsError) -> Bool {
         switch (lhs, rhs) {
         case (.alreadyInitialized, .alreadyInitialized),
-             (.notInitialized, .notInitialized),
-             (.analyticsDisabled, .analyticsDisabled):
+            (.notInitialized, .notInitialized),
+            (.analyticsDisabled, .analyticsDisabled):
             return true
         case (.invalidConfiguration(let lhsMsg), .invalidConfiguration(let rhsMsg)):
             return lhsMsg == rhsMsg
@@ -15,37 +15,37 @@ public enum LuxAnalyticsError: LocalizedError, Equatable, Sendable {
         case (.serverError(let lhsCode, let lhsResponse), .serverError(let rhsCode, let rhsResponse)):
             return lhsCode == rhsCode && lhsResponse == rhsResponse
         case (.networkError(let lhsError), .networkError(let rhsError)),
-             (.encodingError(let lhsError), .encodingError(let rhsError)):
+            (.encodingError(let lhsError), .encodingError(let rhsError)):
             return (lhsError as NSError) == (rhsError as NSError)
         default:
             return false
         }
     }
-    
+
     /// LuxAnalytics has already been initialized
     case alreadyInitialized
-    
+
     /// LuxAnalytics has not been initialized
     case notInitialized
-    
+
     /// Configuration is invalid
     case invalidConfiguration(String)
-    
+
     /// Network error occurred
     case networkError(Error)
-    
+
     /// Server returned an error
     case serverError(statusCode: Int, response: String?)
-    
+
     /// Failed to encode event data
     case encodingError(Error)
-    
+
     /// Queue operation failed
     case queueError(String)
-    
+
     /// Analytics is disabled
     case analyticsDisabled
-    
+
     public var errorDescription: String? {
         switch self {
         case .alreadyInitialized:

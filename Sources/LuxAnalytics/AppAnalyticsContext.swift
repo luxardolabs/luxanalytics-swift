@@ -1,51 +1,53 @@
+import CryptoKit
 import Foundation
+import Security
+
 #if canImport(UIKit)
 import UIKit
 #endif
-import CryptoKit
-import Security
 
 public actor AppAnalyticsContext {
     static let shared = AppAnalyticsContext()
-    
+
     // Cached context - only changes on app restart
     private var cachedContext: [String: String]?
     private var deviceID: String?
-    
+
     private init() {}
-    
+
     /// Get current analytics context (cached)
     public func current() async -> [String: String] {
         if let cached = cachedContext {
             return cached
         }
-        
+
         // Generate context once and cache it
         let context = await generateContext()
         cachedContext = context
         return context
     }
-    
+
     /// Force refresh the cached context (rarely needed)
     public func refresh() async {
         cachedContext = await generateContext()
     }
-    
+
     /// Modern TestFlight detection for iOS 18+
     private static func isTestFlightBuild() -> Bool {
         // Fallback: Check for embedded.mobileprovision (indicates development/TestFlight)
         return Bundle.main.path(forResource: "embedded", ofType: "mobileprovision") != nil
     }
-    
+
     private func generateContext() async -> [String: String] {
         let deviceId = await getOrCreateDeviceID()
-        
+
         let osVersion = ProcessInfo.processInfo.operatingSystemVersion
         let systemVersion = "\(osVersion.majorVersion).\(osVersion.minorVersion).\(osVersion.patchVersion)"
 
         #if canImport(UIKit)
         return await MainActor.run {
-            let screenSize = UIApplication.shared.connectedScenes
+            let screenSize =
+                UIApplication.shared.connectedScenes
                 .compactMap { $0 as? UIWindowScene }
                 .first?.screen.bounds.size ?? .zero
             return [
@@ -59,7 +61,7 @@ public actor AppAnalyticsContext {
                 "timezone": TimeZone.current.identifier,
                 "device_id": deviceId,
                 "is_testflight": Self.isTestFlightBuild() ? "true" : "false",
-                "platform": "ios"
+                "platform": "ios",
             ]
         }
         #else
@@ -75,7 +77,7 @@ public actor AppAnalyticsContext {
             "timezone": TimeZone.current.identifier,
             "device_id": deviceId,
             "is_testflight": "false",
-            "platform": "ios"
+            "platform": "ios",
         ]
         #endif
     }
@@ -116,13 +118,14 @@ public actor AppAnalyticsContext {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: keychainAccount,
             kSecAttrService as String: keychainService,
-            kSecReturnData as String: true
+            kSecReturnData as String: true,
         ]
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         guard status == errSecSuccess,
-              let data = result as? Data,
-              let id = String(data: data, encoding: .utf8) else {
+            let data = result as? Data,
+            let id = String(data: data, encoding: .utf8)
+        else {
             return nil
         }
         return id
@@ -135,7 +138,7 @@ public actor AppAnalyticsContext {
         let baseQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: keychainAccount,
-            kSecAttrService as String: keychainService
+            kSecAttrService as String: keychainService,
         ]
         SecItemDelete(baseQuery as CFDictionary)
 

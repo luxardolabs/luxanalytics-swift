@@ -14,13 +14,13 @@ public actor LuxAnalyticsQueue {
     public static let shared = LuxAnalyticsQueue()
     private let queueKey = "com.luxardolabs.LuxAnalytics.eventQueue.v2"
     private let userDefaults: UserDefaults
-    
+
     /// In-memory cache of the queue
     private var queueCache: [QueuedEvent] = []
-    
+
     /// Track failed batch IDs to prevent infinite retries
     private var failedBatchIds: Set<String> = []
-    
+
     private init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
         // Queue will be loaded on first access
@@ -30,7 +30,7 @@ public actor LuxAnalyticsQueue {
             await loadAndCleanQueue()
         }
     }
-    
+
     private func loadAndCleanQueue() {
         self.queueCache = loadQueue() ?? []
         cleanExpiredEvents(ttlSeconds: LuxAnalyticsDefaults.eventTTL)
@@ -45,12 +45,12 @@ public actor LuxAnalyticsQueue {
         queueCache.append(queuedEvent)
         saveQueue()
     }
-    
+
     public func enqueue(_ queuedEvent: QueuedEvent) {
         queueCache.append(queuedEvent)
         saveQueue()
     }
-    
+
     /// Dequeue events for sending
     public func dequeue(limit: Int) -> [QueuedEvent] {
         let eventsToSend = Array(queueCache.prefix(limit))
@@ -62,13 +62,13 @@ public actor LuxAnalyticsQueue {
     }
 
     // MARK: - Queue Management
-    
+
     private func cleanExpiredEvents(ttlSeconds: TimeInterval) {
         let before = queueCache.count
         let expiredEvents = queueCache.filter { $0.isExpired(ttlSeconds: ttlSeconds) }.map { $0.event }
         queueCache = queueCache.filter { !$0.isExpired(ttlSeconds: ttlSeconds) }
         let after = queueCache.count
-        
+
         if before != after {
             saveQueue()
             SecureLogger.log("Cleaned \(before - after) expired events from queue", category: .queue, level: .info)
@@ -81,10 +81,10 @@ public actor LuxAnalyticsQueue {
             }
         }
     }
-    
+
     private func handleQueueOverflow(strategy: QueueOverflowStrategy, maxQueueSizeHard: Int) {
         SecureLogger.log("Queue overflow: \(queueCache.count) events, applying strategy: \(strategy)", category: .queue, level: .warning)
-        
+
         switch strategy {
         case .dropOldest:
             let toRemove = queueCache.count - maxQueueSizeHard + 1
@@ -97,11 +97,11 @@ public actor LuxAnalyticsQueue {
                     }
                 }
             }
-            
+
         case .dropNewest:
             // Don't add the new event (it will be dropped by the caller)
             break
-            
+
         case .dropAll:
             let droppedEvents = queueCache.map { $0.event }
             queueCache.removeAll()
@@ -111,33 +111,35 @@ public actor LuxAnalyticsQueue {
                 }
             }
         }
-        
+
         saveQueue()
     }
-    
+
     // MARK: - Persistence
-    
+
     private func loadQueue() -> [QueuedEvent]? {
         // Try to load encrypted queue first
         if let encryptedData = userDefaults.data(forKey: queueKey),
-           let decrypted = QueueEncryption.decrypt(encryptedData),
-           let events = try? JSONDecoder().decode([QueuedEvent].self, from: decrypted) {
+            let decrypted = QueueEncryption.decrypt(encryptedData),
+            let events = try? JSONDecoder().decode([QueuedEvent].self, from: decrypted)
+        {
             return events
         }
-        
+
         // Fall back to legacy unencrypted queue
         let legacyKey = "com.luxardolabs.LuxAnalytics.eventQueue"
         if let data = userDefaults.data(forKey: legacyKey),
-           let events = try? JSONDecoder().decode([QueuedEvent].self, from: data) {
+            let events = try? JSONDecoder().decode([QueuedEvent].self, from: data)
+        {
             // Migrate to encrypted storage
             saveQueue()
             userDefaults.removeObject(forKey: legacyKey)
             return events
         }
-        
+
         return nil
     }
-    
+
     private func saveQueue() {
         do {
             let data = try JSONEncoder().encode(queueCache)
@@ -148,28 +150,28 @@ public actor LuxAnalyticsQueue {
             SecureLogger.log("Failed to save queue: \(error)", category: .queue, level: .error)
         }
     }
-    
+
     // MARK: - Public API
-    
+
     public func getQueueStats() -> QueueStats {
         let now = Date()
         let oldestEvent = queueCache.first
         let newestEvent = queueCache.last
         let oldestEventAge = oldestEvent.map { now.timeIntervalSince($0.queuedAt) }
         let newestEventAge = newestEvent.map { now.timeIntervalSince($0.queuedAt) }
-        
+
         _ = queueCache.filter { queuedEvent in
             queuedEvent.retryCount < LuxAnalyticsDefaults.maxRetryAttempts
         }
         _ = queueCache.filter { queuedEvent in
             queuedEvent.isExpired(ttlSeconds: LuxAnalyticsDefaults.eventTTL)
         }
-        
+
         // Calculate total size
         let totalSizeBytes = queueCache.reduce(0) { total, event in
             total + ((try? JSONEncoder().encode(event).count) ?? 0)
         }
-        
+
         return QueueStats(
             totalEvents: queueCache.count,
             totalSizeBytes: totalSizeBytes,
@@ -178,7 +180,7 @@ public actor LuxAnalyticsQueue {
             failedBatchCount: failedBatchIds.count
         )
     }
-    
+
     public func clear() {
         queueCache.removeAll()
         saveQueue()

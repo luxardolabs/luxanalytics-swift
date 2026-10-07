@@ -3,7 +3,8 @@ import Foundation
 public struct AnalyticsConfig: Sendable {
     public static var endpoint: URL {
         guard let urlString = Bundle.main.object(forInfoDictionaryKey: "LUX_API_URL") as? String,
-              let url = URL(string: urlString) else {
+            let url = URL(string: urlString)
+        else {
             fatalError("Missing LUX_API_URL in Info.plist")
         }
         return url

@@ -8,7 +8,7 @@ public struct LuxAnalyticsMetrics: Codable, Sendable {
     public let performanceStats: PerformanceStats
     public let configurationInfo: ConfigurationInfo
     public let circuitBreakerStatus: CircuitBreakerStatus?
-    
+
     public struct NetworkStats: Codable, Sendable {
         public let totalEventsSent: Int
         public let totalEventsFailed: Int
@@ -19,14 +19,14 @@ public struct LuxAnalyticsMetrics: Codable, Sendable {
         public let averagePayloadSize: Int
         public let compressionRatio: Double
     }
-    
+
     public struct PerformanceStats: Codable, Sendable {
         public let averageFlushDuration: TimeInterval
         public let averageCompressionTime: TimeInterval
         public let memoryUsage: Int
         public let diskUsage: Int
     }
-    
+
     public struct ConfigurationInfo: Codable, Sendable {
         public let sdkVersion: String
         public let configuredEndpoint: String
@@ -35,7 +35,7 @@ public struct LuxAnalyticsMetrics: Codable, Sendable {
         public let compressionEnabled: Bool
         public let debugLoggingEnabled: Bool
     }
-    
+
     public struct CircuitBreakerStatus: Codable, Sendable {
         public let state: String
         public let failureCount: Int
@@ -47,7 +47,7 @@ public struct LuxAnalyticsMetrics: Codable, Sendable {
 /// Diagnostics manager for monitoring SDK health
 public actor LuxAnalyticsDiagnostics {
     public static let shared = LuxAnalyticsDiagnostics()
-    
+
     // Metrics tracking
     private var totalEventsSent = 0
     private var totalEventsFailed = 0
@@ -59,41 +59,41 @@ public actor LuxAnalyticsDiagnostics {
     private var compressionRatios: [Double] = []
     private var flushDurations: [TimeInterval] = []
     private var compressionTimes: [TimeInterval] = []
-    
+
     private init() {}
-    
+
     // MARK: - Metric Recording
-    
+
     func recordEventsSent(count: Int) {
         totalEventsSent += count
         lastSuccessfulSend = Date()
     }
-    
+
     func recordEventsFailed(count: Int, error: Error) {
         totalEventsFailed += count
         lastFailedSend = Date()
     }
-    
+
     func recordBatchSent() {
         totalBatchesSent += 1
     }
-    
+
     func recordBytesTransmitted(bytes: Int) {
         // Track bytes sent for bandwidth monitoring
         recordPayloadSize(bytes, compressedSize: bytes)
     }
-    
+
     func recordBatchFailed() {
         totalBatchesFailed += 1
     }
-    
+
     func recordPayloadSize(_ size: Int, compressedSize: Int?) {
         payloadSizes.append(size)
         // Keep only last 100 sizes
         if payloadSizes.count > 100 {
             payloadSizes.removeFirst()
         }
-        
+
         if let compressed = compressedSize {
             let ratio = Double(compressed) / Double(size)
             compressionRatios.append(ratio)
@@ -102,26 +102,26 @@ public actor LuxAnalyticsDiagnostics {
             }
         }
     }
-    
+
     func recordFlushDuration(_ duration: TimeInterval) {
         flushDurations.append(duration)
         if flushDurations.count > 100 {
             flushDurations.removeFirst()
         }
     }
-    
+
     func recordCompressionTime(_ duration: TimeInterval) {
         compressionTimes.append(duration)
         if compressionTimes.count > 100 {
             compressionTimes.removeFirst()
         }
     }
-    
+
     // MARK: - Metrics Retrieval
-    
+
     public func getMetrics() async -> LuxAnalyticsMetrics {
         let queueStats = await LuxAnalyticsQueue.shared.getQueueStats()
-        
+
         let networkStats = LuxAnalyticsMetrics.NetworkStats(
             totalEventsSent: totalEventsSent,
             totalEventsFailed: totalEventsFailed,
@@ -132,14 +132,14 @@ public actor LuxAnalyticsDiagnostics {
             averagePayloadSize: payloadSizes.isEmpty ? 0 : payloadSizes.reduce(0, +) / payloadSizes.count,
             compressionRatio: compressionRatios.isEmpty ? 1.0 : compressionRatios.reduce(0, +) / Double(compressionRatios.count)
         )
-        
+
         let performanceStats = LuxAnalyticsMetrics.PerformanceStats(
             averageFlushDuration: flushDurations.isEmpty ? 0 : flushDurations.reduce(0, +) / Double(flushDurations.count),
             averageCompressionTime: compressionTimes.isEmpty ? 0 : compressionTimes.reduce(0, +) / Double(compressionTimes.count),
             memoryUsage: getMemoryUsage(),
             diskUsage: getDiskUsage()
         )
-        
+
         let config = await LuxAnalyticsStorage.shared.getConfiguration()
         let configInfo = LuxAnalyticsMetrics.ConfigurationInfo(
             sdkVersion: LuxAnalyticsVersion.current,
@@ -149,7 +149,7 @@ public actor LuxAnalyticsDiagnostics {
             compressionEnabled: config?.compressionEnabled ?? false,
             debugLoggingEnabled: config?.debugLogging ?? false
         )
-        
+
         // Get circuit breaker status
         let circuitBreakerMetrics = await LuxAnalytics.getCircuitBreakerStatus()
         let circuitBreakerStatus = LuxAnalyticsMetrics.CircuitBreakerStatus(
@@ -158,7 +158,7 @@ public actor LuxAnalyticsDiagnostics {
             successRate: circuitBreakerMetrics?.successRate ?? 0.0,
             timeInCurrentState: circuitBreakerMetrics?.timeInCurrentState ?? 0.0
         )
-        
+
         return LuxAnalyticsMetrics(
             timestamp: Date(),
             queueStats: queueStats,
@@ -168,7 +168,7 @@ public actor LuxAnalyticsDiagnostics {
             circuitBreakerStatus: circuitBreakerStatus
         )
     }
-    
+
     public func reset() {
         totalEventsSent = 0
         totalEventsFailed = 0
@@ -181,25 +181,26 @@ public actor LuxAnalyticsDiagnostics {
         flushDurations.removeAll()
         compressionTimes.removeAll()
     }
-    
+
     // MARK: - Private Helpers
-    
+
     private func getMemoryUsage() -> Int {
         var info = mach_task_basic_info()
         var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size) / 4
-        
+
         let result = withUnsafeMutablePointer(to: &info) {
             $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
-                task_info(mach_task_self_,
-                         task_flavor_t(MACH_TASK_BASIC_INFO),
-                         $0,
-                         &count)
+                task_info(
+                    mach_task_self_,
+                    task_flavor_t(MACH_TASK_BASIC_INFO),
+                    $0,
+                    &count)
             }
         }
-        
+
         return result == KERN_SUCCESS ? Int(info.resident_size) : 0
     }
-    
+
     private func getDiskUsage() -> Int {
         // Estimate disk usage from UserDefaults
         let key = "com.luxardolabs.LuxAnalytics.eventQueue.v2"
@@ -212,28 +213,28 @@ public actor LuxAnalyticsDiagnostics {
 
 // MARK: - Diagnostic Mode
 
-public extension LuxAnalytics {
-    
+extension LuxAnalytics {
+
     /// Enable diagnostic mode for debugging
-    static func enableDiagnosticMode() async {
+    public static func enableDiagnosticMode() async {
         // Enable debug logging synchronously
         SecureLogger.updateDebugLogging(true)
     }
-    
+
     /// Get current SDK metrics
-    static func getDiagnostics() async -> LuxAnalyticsMetrics {
+    public static func getDiagnostics() async -> LuxAnalyticsMetrics {
         return await LuxAnalyticsDiagnostics.shared.getMetrics()
     }
-    
+
     /// Export diagnostics as JSON
-    static func exportDiagnostics() async -> String? {
+    public static func exportDiagnostics() async -> String? {
         let metrics = await getDiagnostics()
         guard let data = JSONCoders.encodePretty(metrics) else { return nil }
         return String(data: data, encoding: .utf8)
     }
-    
+
     /// Reset diagnostic metrics
-    static func resetDiagnostics() async {
+    public static func resetDiagnostics() async {
         await LuxAnalyticsDiagnostics.shared.reset()
     }
 }

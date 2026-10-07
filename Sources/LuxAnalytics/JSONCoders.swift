@@ -2,7 +2,7 @@ import Foundation
 
 /// Reusable JSON encoder/decoder instances for better performance
 enum JSONCoders {
-    
+
     /// Shared JSON encoder for events
     static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
@@ -11,14 +11,14 @@ enum JSONCoders {
         encoder.outputFormatting = []
         return encoder
     }()
-    
+
     /// Shared JSON decoder for events
     static let decoder: JSONDecoder = {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return decoder
     }()
-    
+
     /// Pretty-printed encoder for diagnostics/debugging
     static let prettyEncoder: JSONEncoder = {
         let encoder = JSONEncoder()
@@ -31,7 +31,7 @@ enum JSONCoders {
 // MARK: - Safe encoding/decoding helpers
 
 extension JSONCoders {
-    
+
     /// Safely encode a value to JSON data
     static func encode<T: Encodable>(_ value: T) -> Data? {
         do {
@@ -41,7 +41,7 @@ extension JSONCoders {
             return nil
         }
     }
-    
+
     /// Safely decode JSON data to a value
     static func decode<T: Decodable>(_ type: T.Type, from data: Data) -> T? {
         do {
@@ -51,7 +51,7 @@ extension JSONCoders {
             return nil
         }
     }
-    
+
     /// Encode for pretty printing (diagnostics)
     static func encodePretty<T: Encodable>(_ value: T) -> Data? {
         do {

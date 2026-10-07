@@ -1,6 +1,7 @@
-import Testing
 import Foundation
 import Security
+import Testing
+
 @testable import LuxAnalytics
 
 // MARK: - Shared test helpers
@@ -15,7 +16,7 @@ private func keychainIsAvailable() -> Bool {
     let base: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
         kSecAttrService as String: "LuxAnalyticsTests",
-        kSecAttrAccount as String: "com.luxardolabs.LuxAnalytics.keychainProbe"
+        kSecAttrAccount as String: "com.luxardolabs.LuxAnalytics.keychainProbe",
     ]
     SecItemDelete(base as CFDictionary)
     var add = base
@@ -224,9 +225,11 @@ struct EventStreamTests {
 @Suite
 struct LuxAnalyticsErrorTests {
     @Test func serverErrorEqualityConsidersCodeAndResponse() {
-        #expect(LuxAnalyticsError.serverError(statusCode: 500, response: "x")
+        #expect(
+            LuxAnalyticsError.serverError(statusCode: 500, response: "x")
                 == LuxAnalyticsError.serverError(statusCode: 500, response: "x"))
-        #expect(LuxAnalyticsError.serverError(statusCode: 500, response: "x")
+        #expect(
+            LuxAnalyticsError.serverError(statusCode: 500, response: "x")
                 != LuxAnalyticsError.serverError(statusCode: 500, response: "y"))
     }
 

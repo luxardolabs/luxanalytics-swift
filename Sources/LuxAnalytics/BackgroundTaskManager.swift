@@ -1,4 +1,5 @@
 import Foundation
+
 #if os(iOS)
 import BackgroundTasks
 #endif
@@ -9,89 +10,89 @@ import UIKit
 /// Manages background task scheduling for analytics
 @MainActor
 public final class BackgroundTaskManager {
-    
-#if os(iOS)
+
+    #if os(iOS)
     /// Background task identifier
     public static let taskIdentifier = "com.luxardolabs.LuxAnalytics.flush"
-#endif
-    
+    #endif
+
     /// Shared instance
     public static let shared = BackgroundTaskManager()
-    
+
     private init() {}
-    
+
     /// Register background tasks (call from AppDelegate)
     public func registerBackgroundTasks() {
-#if os(iOS)
+        #if os(iOS)
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: Self.taskIdentifier,
             using: nil
         ) { task in
             self.handleBackgroundTask(task)
         }
-#endif
+        #endif
     }
-    
+
     /// Schedule a background task
     public func scheduleBackgroundFlush() {
-#if os(iOS)
+        #if os(iOS)
         let request = BGProcessingTaskRequest(identifier: Self.taskIdentifier)
         request.requiresNetworkConnectivity = true
         request.requiresExternalPower = false
-        
+
         // Try to run within the next hour
         request.earliestBeginDate = Date(timeIntervalSinceNow: 3600)
-        
+
         do {
             try BGTaskScheduler.shared.submit(request)
         } catch {
             SecureLogger.log("Failed to schedule background task: \(error)", category: .error, level: .error)
         }
-#endif
+        #endif
     }
-    
+
     /// Cancel pending background tasks
     public func cancelBackgroundTasks() {
-#if os(iOS)
+        #if os(iOS)
         BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.taskIdentifier)
-#endif
+        #endif
     }
-    
-#if os(iOS)
+
+    #if os(iOS)
     private func handleBackgroundTask(_ task: BGTask) {
         // Schedule next background task
         scheduleBackgroundFlush()
-        
+
         // Create a background task for analytics flush
         let flushTask = Task {
             await LuxAnalytics.flush()
             task.setTaskCompleted(success: true)
         }
-        
+
         // Handle expiration
         task.expirationHandler = {
             flushTask.cancel()
             task.setTaskCompleted(success: false)
         }
     }
-#endif
+    #endif
 }
 
 // MARK: - App Lifecycle Integration
 
 extension BackgroundTaskManager {
-    
+
     /// Setup background task handling (call from AppDelegate)
     public func setupBackgroundHandling() {
         // Register background tasks
         registerBackgroundTasks()
     }
-    
+
     /// Run a simple background task with UIApplication beginBackgroundTask
     public func runBackgroundTask(_ work: @escaping () async -> Void) async {
         #if canImport(UIKit)
         var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
-        
+
         backgroundTaskID = UIApplication.shared.beginBackgroundTask(withName: "LuxAnalytics.flush") {
             // Expiration handler
             Task { @MainActor in
@@ -101,10 +102,10 @@ extension BackgroundTaskManager {
                 }
             }
         }
-        
+
         // Perform the work
         await work()
-        
+
         // End the background task
         await MainActor.run {
             if backgroundTaskID != .invalid {
@@ -123,7 +124,7 @@ extension BackgroundTaskManager {
 // MARK: - Background Processing
 
 extension LuxAnalytics {
-    
+
     /// Enable background task processing
     @MainActor
     public static func enableBackgroundProcessing() {

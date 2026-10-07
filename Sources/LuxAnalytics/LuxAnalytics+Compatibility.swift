@@ -2,7 +2,7 @@ import Foundation
 
 // Convenience initialization helpers
 extension LuxAnalytics {
-    
+
     /// Configure and initialize LuxAnalytics in one call
     /// Useful for simple configurations
     public static func quickStart(
@@ -15,7 +15,7 @@ extension LuxAnalytics {
         )
         try await initialize(with: config)
     }
-    
+
     /// Initialize LuxAnalytics from Info.plist configuration
     /// Reads LuxAnalyticsDSN and optional configuration from Info.plist
     /// - Parameter bundle: The bundle to read from (defaults to main bundle)
