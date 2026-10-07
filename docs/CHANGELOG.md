@@ -33,6 +33,7 @@ First release of the `luxanalytics-swift` repository, which starts a new single-
 
 ### Tests
 - Suites that share global singletons are nested under one serialized parent. Before, they raced each other in parallel and failed intermittently
+- The event `id` is pinned as the server's idempotency key: tests check it is sent, unchanged across retries and through queue persistence
 - New wire-payload tests: a single event is sent bare, a batch is wrapped in `events`, keys are sorted, and compression round-trips as raw DEFLATE
 
 ## [1.0.2] - 2026-06-30

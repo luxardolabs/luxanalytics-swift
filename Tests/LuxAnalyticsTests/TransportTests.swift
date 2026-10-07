@@ -38,6 +38,32 @@ struct WirePayloadTests {
         #expect(offsets == offsets.sorted())
     }
 
+    // The event id is the server's idempotency key: a retried event must carry the
+    // same id it was first sent with, or the server can't drop the duplicate.
+    @Test func idIsSentOnTheWire() throws {
+        let event = queued("a")
+        let data = try LuxAnalytics.encodePayload([event])
+        let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(object["id"] as? String == event.event.id)
+    }
+
+    @Test func idSurvivesARetry() throws {
+        var event = queued("a")
+        let original = event.event.id
+        event.recordFailedAttempt()
+        event.recordFailedAttempt()
+        let data = try LuxAnalytics.encodePayload([event, queued("b")])
+        let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let events = try #require(object["events"] as? [[String: Any]])
+        #expect(events.first?["id"] as? String == original)
+    }
+
+    @Test func idSurvivesQueuePersistence() throws {
+        let event = queued("a")
+        let restored = try JSONDecoder().decode(QueuedEvent.self, from: JSONEncoder().encode(event))
+        #expect(restored.event.id == event.event.id)
+    }
+
     @Test func compressionRoundTripsAsRawDeflate() throws {
         let original = Data(String(repeating: "{\"name\":\"screen_view\"}", count: 64).utf8)
         let compressed = try #require(original.zlibCompressed())
