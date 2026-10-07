@@ -27,7 +27,7 @@ public final class LuxAnalytics: Sendable {
                     3. A singleton's init() method tracks analytics
                     
                     Fix: Move LuxAnalytics.initialize() earlier in your app lifecycle.
-                    See: https://github.com/luxardolabs/LuxAnalytics#initialization-order
+                    See: https://github.com/luxardolabs/luxanalytics-swift#initialization-order
                     
                     Call stack:
                     \(callStack)

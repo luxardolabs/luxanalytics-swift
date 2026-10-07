@@ -15,8 +15,8 @@ Before starting, ensure you have:
 Add LuxAnalytics to your project using Swift Package Manager:
 
 1. **File** → **Add Package Dependencies...**
-2. Enter URL: `https://github.com/luxardolabs/LuxAnalytics`
-3. Select version: `1.0.0` or later
+2. Enter URL: `https://github.com/luxardolabs/luxanalytics-swift`
+3. Select version: `1.1.0` or later
 4. Click **Add Package**
 
 ## Step 2: Basic Setup

@@ -24,11 +24,11 @@ Complete guide to setting up LuxAnalytics for development, contributing, and tes
 
 ```bash
 # Fork the repository on GitHub first, then clone your fork
-git clone https://github.com/YOUR_USERNAME/LuxAnalytics.git
-cd LuxAnalytics
+git clone https://github.com/YOUR_USERNAME/luxanalytics-swift.git
+cd luxanalytics-swift
 
 # Add upstream remote
-git remote add upstream https://github.com/luxardolabs/LuxAnalytics.git
+git remote add upstream https://github.com/luxardolabs/luxanalytics-swift.git
 
 # Verify remotes
 git remote -v
@@ -903,8 +903,8 @@ rm -rf ~/Library/Developer/Xcode/DerivedData
 ### Getting Help
 
 - **Documentation**: Check [docs/wiki/](../wiki/) for detailed guides
-- **Issues**: Search [GitHub Issues](https://github.com/luxardolabs/LuxAnalytics/issues)
-- **Discussions**: Join [GitHub Discussions](https://github.com/luxardolabs/LuxAnalytics/discussions)
+- **Issues**: Search [GitHub Issues](https://github.com/luxardolabs/luxanalytics-swift/issues)
+- **Discussions**: Join [GitHub Discussions](https://github.com/luxardolabs/luxanalytics-swift/discussions)
 - **Contributing**: See [CONTRIBUTING.md](../CONTRIBUTING.md)
 
 ## Next Steps

@@ -17,7 +17,7 @@ Common issues and solutions when using LuxAnalytics.
 2. **Verify Package.swift dependency:**
    ```swift
    dependencies: [
-       .package(url: "https://github.com/luxardolabs/LuxAnalytics", from: "1.0.0")
+       .package(url: "https://github.com/luxardolabs/luxanalytics-swift", from: "1.1.0")
    ],
    targets: [
        .target(
@@ -394,8 +394,8 @@ If you're still having issues:
 
 ### Support Channels
 
-- 🐛 [GitHub Issues](https://github.com/luxardolabs/LuxAnalytics/issues) - Bug reports
-- 💬 [GitHub Discussions](https://github.com/luxardolabs/LuxAnalytics/discussions) - Questions
+- 🐛 [GitHub Issues](https://github.com/luxardolabs/luxanalytics-swift/issues) - Bug reports
+- 💬 [GitHub Discussions](https://github.com/luxardolabs/luxanalytics-swift/discussions) - Questions
 - 📧 support@luxardolabs.com - Direct support
 
 ### Information to Include

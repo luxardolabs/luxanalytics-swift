@@ -17,7 +17,7 @@ A **privacy-first**, **high-performance** analytics SDK for iOS 18+ built with S
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/luxardolabs/LuxAnalytics", from: "1.0.0")
+    .package(url: "https://github.com/luxardolabs/luxanalytics-swift", from: "1.1.0")
 ]
 ```
 
@@ -58,6 +58,14 @@ await analytics.setUser("user-123")
 await analytics.setSession("session-456")
 ```
 
+Releases on this repository start at **1.1.0**. The product and module are still `LuxAnalytics`, so `import LuxAnalytics` is unchanged.
+
+## 🖥️ Server
+
+LuxAnalytics needs a backend to receive events. The server is a separate, self-hostable project: **[luxardolabs/luxanalytics](https://github.com/luxardolabs/luxanalytics)** (AGPL-3.0).
+
+The wire format the SDK sends is specified once, in the server repository: **[Event format](https://github.com/luxardolabs/luxanalytics#event-formats)**.
+
 ## 📋 Requirements
 
 - **iOS 18.0+** 
@@ -81,10 +89,12 @@ We welcome contributions! See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidel
 
 ## 📞 Support
 
-- 🐛 [GitHub Issues](https://github.com/luxardolabs/LuxAnalytics/issues)
-- 💬 [GitHub Discussions](https://github.com/luxardolabs/LuxAnalytics/discussions)
+- 🐛 [GitHub Issues](https://github.com/luxardolabs/luxanalytics-swift/issues)
+- 💬 [GitHub Discussions](https://github.com/luxardolabs/luxanalytics-swift/discussions)
 - 📧 support@luxardolabs.com
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) for details.
+The SDK is released under the [MIT License](LICENSE). Copyright (c) 2025-2026 Luxardo Labs.
+
+The [server](https://github.com/luxardolabs/luxanalytics) is a separate project under AGPL-3.0; the SDK you ship in your app is covered by the MIT License alone.

@@ -16,8 +16,8 @@ Thank you for your interest in contributing to LuxAnalytics!
 1. Fork the repository
 2. Clone your fork:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/LuxAnalytics.git
-   cd LuxAnalytics
+   git clone https://github.com/YOUR_USERNAME/luxanalytics-swift.git
+   cd luxanalytics-swift
    ```
 
 3. Open in Xcode:
@@ -89,4 +89,4 @@ Open an issue for discussion before making large changes.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the GNU General Public License v3.0.
+By contributing, you agree that your contributions will be licensed under the MIT License (see [LICENSE](../LICENSE)).

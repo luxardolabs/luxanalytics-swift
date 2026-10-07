@@ -19,11 +19,11 @@ Complete guide to installing and setting up LuxAnalytics in your iOS project.
 2. Go to **File** → **Add Package Dependencies...**
 3. Enter the repository URL:
    ```
-   https://github.com/luxardolabs/LuxAnalytics
+   https://github.com/luxardolabs/luxanalytics-swift
    ```
 4. Select version constraint:
-   - **Up to Next Major**: `1.0.0 < 2.0.0` (recommended)
-   - **Exact Version**: `1.0.0`
+   - **Up to Next Major**: `1.1.0 < 2.0.0` (recommended)
+   - **Exact Version**: `1.1.0`
    - **Branch**: `main` (for latest development)
 5. Click **Add Package**
 6. Select **LuxAnalytics** target and click **Add Package**
@@ -43,8 +43,8 @@ let package = Package(
     ],
     dependencies: [
         .package(
-            url: "https://github.com/luxardolabs/LuxAnalytics", 
-            from: "1.0.0"
+            url: "https://github.com/luxardolabs/luxanalytics-swift", 
+            from: "1.1.0"
         )
     ],
     targets: [
@@ -289,7 +289,7 @@ If installation issues persist:
    - Xcode 16.0+
 
 3. **Report issue**:
-   - [GitHub Issues](https://github.com/luxardolabs/LuxAnalytics/issues)
+   - [GitHub Issues](https://github.com/luxardolabs/luxanalytics-swift/issues)
    - Include Xcode version, iOS version, error messages
    - Provide minimal reproduction case
 
@@ -308,6 +308,6 @@ After successful installation:
 
 | Version | iOS | Swift | Xcode | Notes |
 |---------|-----|-------|-------|-------|
-| 1.0.0+ | 18.0+ | 6.0+ | 16.0+ | Initial release with full Swift 6 support |
+| 1.1.0+ | 18.0+ | 6.0+ | 16.0+ | First release of luxanalytics-swift (MIT) |
 
-For older platform support, consider alternative analytics solutions or contact support for enterprise licensing options.
+For older platform support, consider alternative analytics solutions.
