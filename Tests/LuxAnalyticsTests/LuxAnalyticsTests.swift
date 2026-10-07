@@ -4,6 +4,16 @@ import Testing
 
 @testable import LuxAnalytics
 
+// MARK: - Shared global state
+
+/// Every suite that touches a process-wide singleton (LuxAnalyticsStorage,
+/// LuxAnalyticsQueue.shared, GlobalCircuitBreaker.shared, AnalyticsSettings,
+/// the Keychain, the event stream) is nested here. `.serialized` on a
+/// suite applies to the suites nested in it, so these run one at a time
+/// instead of racing each other in parallel.
+@Suite(.serialized)
+enum GlobalStateTests {}
+
 // MARK: - Shared test helpers
 
 private let validDSN = "https://testpublic@test.example.com/api/v1/events/testproject"
@@ -38,68 +48,70 @@ private func makeEvent(_ name: String) -> AnalyticsEvent {
 
 // MARK: - Configuration
 
-@Suite(.serialized)
-struct ConfigurationTests {
-    init() async { await LuxAnalyticsTestHelper.reset() }
+extension GlobalStateTests {
+    @Suite(.serialized)
+    struct ConfigurationTests {
+        init() async { await LuxAnalyticsTestHelper.reset() }
 
-    @Test func parsesDSN() throws {
-        let dsn = "https://a1b2c3d4e5f6@analytics.example.com/api/v1/events/1234567890123456"
-        let config = try LuxAnalyticsConfiguration(dsn: dsn)
-        #expect(config.dsn == dsn)
-        #expect(config.publicId == "a1b2c3d4e5f6")
-        #expect(config.projectId == "1234567890123456")
-        #expect(config.apiURL.absoluteString == "https://analytics.example.com/api/v1/events/")
-    }
-
-    @Test func invalidDSNThrows() {
-        #expect(throws: LuxAnalyticsError.self) {
-            try LuxAnalyticsConfiguration(dsn: "not-a-url")
+        @Test func parsesDSN() throws {
+            let dsn = "https://a1b2c3d4e5f6@analytics.example.com/api/v1/events/1234567890123456"
+            let config = try LuxAnalyticsConfiguration(dsn: dsn)
+            #expect(config.dsn == dsn)
+            #expect(config.publicId == "a1b2c3d4e5f6")
+            #expect(config.projectId == "1234567890123456")
+            #expect(config.apiURL.absoluteString == "https://analytics.example.com/api/v1/events/")
         }
-    }
 
-    @Test func usesDefaults() throws {
-        let config = try LuxAnalyticsConfiguration(dsn: validDSN)
-        #expect(config.autoFlushInterval == LuxAnalyticsDefaults.autoFlushInterval)
-        #expect(config.maxQueueSize == LuxAnalyticsDefaults.maxQueueSize)
-        #expect(config.batchSize == LuxAnalyticsDefaults.batchSize)
-        #expect(config.maxRetryAttempts == LuxAnalyticsDefaults.maxRetryAttempts)
-        #expect(config.overflowStrategy == LuxAnalyticsDefaults.overflowStrategy)
-    }
+        @Test func invalidDSNThrows() {
+            #expect(throws: LuxAnalyticsError.self) {
+                try LuxAnalyticsConfiguration(dsn: "not-a-url")
+            }
+        }
 
-    @Test func appliesCustomValues() throws {
-        let config = try LuxAnalyticsConfiguration(
-            dsn: validDSN,
-            autoFlushInterval: 60,
-            maxQueueSize: 200,
-            batchSize: 20,
-            debugLogging: true,
-            requestTimeout: 30,
-            maxQueueSizeHard: 1000,
-            eventTTL: 86400,
-            maxRetryAttempts: 3,
-            overflowStrategy: .dropNewest
-        )
-        #expect(config.autoFlushInterval == 60)
-        #expect(config.maxQueueSize == 200)
-        #expect(config.batchSize == 20)
-        #expect(config.debugLogging == true)
-        #expect(config.overflowStrategy == .dropNewest)
-    }
+        @Test func usesDefaults() throws {
+            let config = try LuxAnalyticsConfiguration(dsn: validDSN)
+            #expect(config.autoFlushInterval == LuxAnalyticsDefaults.autoFlushInterval)
+            #expect(config.maxQueueSize == LuxAnalyticsDefaults.maxQueueSize)
+            #expect(config.batchSize == LuxAnalyticsDefaults.batchSize)
+            #expect(config.maxRetryAttempts == LuxAnalyticsDefaults.maxRetryAttempts)
+            #expect(config.overflowStrategy == LuxAnalyticsDefaults.overflowStrategy)
+        }
 
-    @Test func initializeSetsInitialized() async throws {
-        let config = try LuxAnalyticsConfiguration(dsn: validDSN)
-        try await LuxAnalytics.initialize(with: config)
-        #expect(await LuxAnalytics.isInitialized == true)
-    }
+        @Test func appliesCustomValues() throws {
+            let config = try LuxAnalyticsConfiguration(
+                dsn: validDSN,
+                autoFlushInterval: 60,
+                maxQueueSize: 200,
+                batchSize: 20,
+                debugLogging: true,
+                requestTimeout: 30,
+                maxQueueSizeHard: 1000,
+                eventTTL: 86400,
+                maxRetryAttempts: 3,
+                overflowStrategy: .dropNewest
+            )
+            #expect(config.autoFlushInterval == 60)
+            #expect(config.maxQueueSize == 200)
+            #expect(config.batchSize == 20)
+            #expect(config.debugLogging == true)
+            #expect(config.overflowStrategy == .dropNewest)
+        }
 
-    @Test func doubleInitializeThrows() async throws {
-        let config = try LuxAnalyticsConfiguration(dsn: validDSN)
-        try await LuxAnalytics.initialize(with: config)
-        do {
+        @Test func initializeSetsInitialized() async throws {
+            let config = try LuxAnalyticsConfiguration(dsn: validDSN)
             try await LuxAnalytics.initialize(with: config)
-            Issue.record("Expected the second initialize to throw .alreadyInitialized")
-        } catch let error as LuxAnalyticsError {
-            #expect(error == .alreadyInitialized)
+            #expect(await LuxAnalytics.isInitialized == true)
+        }
+
+        @Test func doubleInitializeThrows() async throws {
+            let config = try LuxAnalyticsConfiguration(dsn: validDSN)
+            try await LuxAnalytics.initialize(with: config)
+            do {
+                try await LuxAnalytics.initialize(with: config)
+                Issue.record("Expected the second initialize to throw .alreadyInitialized")
+            } catch let error as LuxAnalyticsError {
+                #expect(error == .alreadyInitialized)
+            }
         }
     }
 }
@@ -131,19 +143,21 @@ struct CircuitBreakerTests {
     }
 }
 
-@Suite(.serialized)
-struct GlobalCircuitBreakerTests {
-    @Test func opensAfterFailuresAndResetClears() async {
-        let url = URL(string: "https://cb-test.example.com/api")!
-        await GlobalCircuitBreaker.shared.remove(for: url)
+extension GlobalStateTests {
+    @Suite(.serialized)
+    struct GlobalCircuitBreakerTests {
+        @Test func opensAfterFailuresAndResetClears() async {
+            let url = URL(string: "https://cb-test.example.com/api")!
+            await GlobalCircuitBreaker.shared.remove(for: url)
 
-        for _ in 0..<5 { await GlobalCircuitBreaker.shared.recordFailure(for: url) }
-        #expect(await GlobalCircuitBreaker.shared.isOpen(for: url) == true)
+            for _ in 0..<5 { await GlobalCircuitBreaker.shared.recordFailure(for: url) }
+            #expect(await GlobalCircuitBreaker.shared.isOpen(for: url) == true)
 
-        await GlobalCircuitBreaker.shared.reset(for: url)
-        #expect(await GlobalCircuitBreaker.shared.isOpen(for: url) == false)
+            await GlobalCircuitBreaker.shared.reset(for: url)
+            #expect(await GlobalCircuitBreaker.shared.isOpen(for: url) == false)
 
-        await GlobalCircuitBreaker.shared.remove(for: url)
+            await GlobalCircuitBreaker.shared.remove(for: url)
+        }
     }
 }
 
@@ -178,45 +192,49 @@ struct SecureLoggerTests {
 
 // MARK: - Queue encryption (validates round-trip + cached-key reset)
 
-@Suite(.serialized)
-struct QueueEncryptionTests {
-    @Test(.enabled(if: keychainIsAvailable()))
-    func encryptDecryptRoundTrips() throws {
-        let original = Data("sensitive payload \u{1F510}".utf8)
-        let encrypted = try #require(QueueEncryption.encrypt(original))
-        #expect(encrypted != original)
-        let decrypted = try #require(QueueEncryption.decrypt(encrypted))
-        #expect(decrypted == original)
-    }
+extension GlobalStateTests {
+    @Suite(.serialized)
+    struct QueueEncryptionTests {
+        @Test(.enabled(if: keychainIsAvailable()))
+        func encryptDecryptRoundTrips() throws {
+            let original = Data("sensitive payload \u{1F510}".utf8)
+            let encrypted = try #require(QueueEncryption.encrypt(original))
+            #expect(encrypted != original)
+            let decrypted = try #require(QueueEncryption.decrypt(encrypted))
+            #expect(decrypted == original)
+        }
 
-    @Test(.enabled(if: keychainIsAvailable()))
-    func regeneratesUsableKeyAfterDeletion() throws {
-        _ = QueueEncryption.encrypt(Data("warm up".utf8))
-        QueueEncryption.deleteKey()  // clears Keychain entry AND the in-memory cache
+        @Test(.enabled(if: keychainIsAvailable()))
+        func regeneratesUsableKeyAfterDeletion() throws {
+            _ = QueueEncryption.encrypt(Data("warm up".utf8))
+            QueueEncryption.deleteKey()  // clears Keychain entry AND the in-memory cache
 
-        let data = Data("after reset".utf8)
-        let encrypted = try #require(QueueEncryption.encrypt(data))
-        let decrypted = try #require(QueueEncryption.decrypt(encrypted))
-        #expect(decrypted == data)
+            let data = Data("after reset".utf8)
+            let encrypted = try #require(QueueEncryption.encrypt(data))
+            let decrypted = try #require(QueueEncryption.decrypt(encrypted))
+            #expect(decrypted == data)
+        }
     }
 }
 
 // MARK: - Event stream (validates the synchronous-registration race fix)
 
-@Suite(.serialized)
-struct EventStreamTests {
-    @Test func deliversEventEmittedRightAfterSubscription() async {
-        // Accessing eventStream registers the observer synchronously (the 1.0.2 fix),
-        // so an event emitted immediately afterward is not lost.
-        var iterator = LuxAnalyticsEvents.eventStream.makeAsyncIterator()
-        await LuxAnalytics.notifyEventsSent([makeEvent("stream_probe_event")])
+extension GlobalStateTests {
+    @Suite(.serialized)
+    struct EventStreamTests {
+        @Test func deliversEventEmittedRightAfterSubscription() async {
+            // Accessing eventStream registers the observer synchronously (the 1.0.2 fix),
+            // so an event emitted immediately afterward is not lost.
+            var iterator = LuxAnalyticsEvents.eventStream.makeAsyncIterator()
+            await LuxAnalytics.notifyEventsSent([makeEvent("stream_probe_event")])
 
-        let received = await iterator.next()
-        guard case .eventsSent(let events)? = received else {
-            Issue.record("Expected .eventsSent, got \(String(describing: received))")
-            return
+            let received = await iterator.next()
+            guard case .eventsSent(let events)? = received else {
+                Issue.record("Expected .eventsSent, got \(String(describing: received))")
+                return
+            }
+            #expect(events.first?.name == "stream_probe_event")
         }
-        #expect(events.first?.name == "stream_probe_event")
     }
 }
 
@@ -319,50 +337,54 @@ struct QueuedEventTests {
 
 // MARK: - Queue behavior
 
-@Suite(.serialized)
-struct QueueTests {
-    init() async throws {
-        try await LuxAnalyticsTestHelper.initializeForTesting()
-        await LuxAnalyticsQueue.shared.clear()
-    }
+extension GlobalStateTests {
+    @Suite(.serialized)
+    struct QueueTests {
+        init() async throws {
+            try await LuxAnalyticsTestHelper.initializeForTesting()
+            await LuxAnalyticsQueue.shared.clear()
+        }
 
-    @Test func enqueueIncrementsSize() async {
-        let before = await LuxAnalyticsQueue.shared.queueSize
-        await LuxAnalyticsQueue.shared.enqueue(makeEvent("e"))
-        #expect(await LuxAnalyticsQueue.shared.queueSize == before + 1)
-    }
+        @Test func enqueueIncrementsSize() async {
+            let before = await LuxAnalyticsQueue.shared.queueSize
+            await LuxAnalyticsQueue.shared.enqueue(makeEvent("e"))
+            #expect(await LuxAnalyticsQueue.shared.queueSize == before + 1)
+        }
 
-    @Test func clearEmptiesQueue() async {
-        await LuxAnalyticsQueue.shared.enqueue(makeEvent("a"))
-        await LuxAnalyticsQueue.shared.enqueue(makeEvent("b"))
-        await LuxAnalyticsQueue.shared.clear()
-        #expect(await LuxAnalyticsQueue.shared.queueSize == 0)
-    }
+        @Test func clearEmptiesQueue() async {
+            await LuxAnalyticsQueue.shared.enqueue(makeEvent("a"))
+            await LuxAnalyticsQueue.shared.enqueue(makeEvent("b"))
+            await LuxAnalyticsQueue.shared.clear()
+            #expect(await LuxAnalyticsQueue.shared.queueSize == 0)
+        }
 
-    @Test func statsReflectQueuedEvents() async {
-        await LuxAnalyticsQueue.shared.clear()
-        for i in 0..<5 { await LuxAnalyticsQueue.shared.enqueue(makeEvent("e\(i)")) }
-        let stats = await LuxAnalyticsQueue.shared.getQueueStats()
-        #expect(stats.totalEvents == 5)
-        #expect(stats.failedBatchCount == 0)
-        if let age = stats.oldestEventAge {
-            #expect(age < 5)
+        @Test func statsReflectQueuedEvents() async {
+            await LuxAnalyticsQueue.shared.clear()
+            for i in 0..<5 { await LuxAnalyticsQueue.shared.enqueue(makeEvent("e\(i)")) }
+            let stats = await LuxAnalyticsQueue.shared.getQueueStats()
+            #expect(stats.totalEvents == 5)
+            #expect(stats.failedBatchCount == 0)
+            if let age = stats.oldestEventAge {
+                #expect(age < 5)
+            }
         }
     }
 }
 
 // MARK: - Settings
 
-@Suite(.serialized)
-struct AnalyticsSettingsTests {
-    @Test func enableThenDisableIsReflected() async {
-        await AnalyticsSettings.shared.setEnabled(true)
-        #expect(await AnalyticsSettings.shared.isEnabled == true)
+extension GlobalStateTests {
+    @Suite(.serialized)
+    struct AnalyticsSettingsTests {
+        @Test func enableThenDisableIsReflected() async {
+            await AnalyticsSettings.shared.setEnabled(true)
+            #expect(await AnalyticsSettings.shared.isEnabled == true)
 
-        await AnalyticsSettings.shared.setEnabled(false)
-        #expect(await AnalyticsSettings.shared.isEnabled == false)
+            await AnalyticsSettings.shared.setEnabled(false)
+            #expect(await AnalyticsSettings.shared.isEnabled == false)
 
-        await AnalyticsSettings.shared.setEnabled(true)  // restore default
+            await AnalyticsSettings.shared.setEnabled(true)  // restore default
+        }
     }
 }
 
