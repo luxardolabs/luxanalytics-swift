@@ -240,40 +240,43 @@ let config = try LuxAnalyticsConfiguration(
 - **Manual cleanup**: `clearQueue()` for immediate removal
 - **Automatic maintenance**: Background cleanup of expired events
 
+### Device Identifier
+
+Every event carries a `device_id` in its context. It is a SHA-256 hash, so the value it was made from is never sent:
+
+- **First launch:** the ID is derived from `identifierForVendor`.
+- **Storage:** it is kept in the Keychain (`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`). It is never backed up or synced to another device, and it stays readable while the device is locked after first unlock, so background flushes work.
+- **Reinstall:** a Keychain item survives the app being deleted and reinstalled on the same device. **A user who reinstalls keeps the same device ID**, even though `identifierForVendor` itself may change. That is deliberate (analytics continuity), but your privacy policy should say so.
+
+To give a user a fresh identity, call:
+
+```swift
+await LuxAnalytics.resetDeviceID()
+```
+
+The new ID is random, not re-derived from `identifierForVendor`. Events already queued keep the old ID, and events tracked afterwards carry the new one. A natural place to call it is when a user withdraws analytics consent or asks you to reset their data:
+
+```swift
+static func optOut() async {
+    await AnalyticsSettings.shared.setEnabled(false)
+    await LuxAnalytics.clearQueue()
+    await LuxAnalytics.resetDeviceID()
+}
+```
+
 ## Compliance Features
 
 ### GDPR Support
 
 - **Lawful basis**: Legitimate interest or consent
 - **Data minimization**: Only necessary data collected
-- **Right to erasure**: `clearQueue()` method
+- **Right to erasure**: `clearQueue()` removes queued events, and `resetDeviceID()` replaces the device identifier
 - **Data portability**: Events available in standard JSON format
 - **Privacy by design**: Built-in privacy features
 
 ### App Store Privacy
 
-Compatible with App Store privacy requirements:
-
-```xml
-<!-- PrivacyInfo.xcprivacy (automatically included) -->
-<dict>
-    <key>NSPrivacyCollectedDataTypes</key>
-    <array>
-        <dict>
-            <key>NSPrivacyCollectedDataType</key>
-            <string>NSPrivacyCollectedDataTypeProductInteraction</string>
-            <key>NSPrivacyCollectedDataTypeLinked</key>
-            <false/>
-            <key>NSPrivacyCollectedDataTypeTracking</key>
-            <false/>
-            <key>NSPrivacyCollectedDataTypePurposes</key>
-            <array>
-                <string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
-            </array>
-        </dict>
-    </array>
-</dict>
-```
+The SDK ships its own privacy manifest, [`Sources/LuxAnalytics/PrivacyInfo.xcprivacy`](../../Sources/LuxAnalytics/PrivacyInfo.xcprivacy), and Xcode merges it into your app's privacy report automatically. It declares the collected data types (device ID, product interaction, other usage data, all for analytics and none for tracking) and the one required-reason API the SDK uses (`UserDefaults`, reason `CA92.1`). Read the file itself rather than a copy here, so the two can't drift.
 
 ## Security Best Practices
 

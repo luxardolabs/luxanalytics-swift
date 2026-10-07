@@ -72,6 +72,16 @@ func getCurrentUser() async -> String?
 func getCurrentSession() async -> String?
 ```
 
+#### Device Identity
+
+```swift
+// Replace this device's analytics ID with a new random one.
+// The ID otherwise survives app reinstalls (it lives in the Keychain).
+static func resetDeviceID() async
+```
+
+See [Privacy & Security → Device Identifier](Privacy-Security.md#device-identifier).
+
 #### Queue Management
 
 ```swift

@@ -82,6 +82,27 @@ public actor AppAnalyticsContext {
         #endif
     }
 
+    /// The device ID attached to events. Created on first use.
+    func currentDeviceID() async -> String {
+        await getOrCreateDeviceID()
+    }
+
+    /// Replace the device ID with a new random one and persist it.
+    ///
+    /// The new ID is seeded from a random UUID, not `identifierForVendor`:
+    /// the vendor ID doesn't change within an install, so re-deriving from it
+    /// would hand back the same ID and the reset would do nothing.
+    /// - Returns: The new device ID.
+    @discardableResult
+    func resetDeviceID() -> String {
+        let id = Self.makeDeviceID(seed: UUID().uuidString)
+        Self.writeToKeychain(id)
+        deviceID = id
+        // The cached context carries the old ID.
+        cachedContext = nil
+        return id
+    }
+
     private static let keychainAccount = "com.luxardolabs.LuxAnalytics.deviceID"
     private static let keychainService = "LuxAnalytics"
 
@@ -103,14 +124,18 @@ public actor AppAnalyticsContext {
         let seed = UUID().uuidString
         #endif
 
-        let hash = SHA256.hash(data: Data(seed.utf8))
-        let id = hash.map { String(format: "%02x", $0) }.joined()
+        let id = Self.makeDeviceID(seed: seed)
 
         // Persist to Keychain
         Self.writeToKeychain(id)
 
         deviceID = id
         return id
+    }
+
+    /// A device ID is the hex SHA-256 of its seed, so the seed itself is never sent.
+    private static func makeDeviceID(seed: String) -> String {
+        SHA256.hash(data: Data(seed.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     private static func readFromKeychain() -> String? {
@@ -144,8 +169,11 @@ public actor AppAnalyticsContext {
 
         var addQuery = baseQuery
         addQuery[kSecValueData as String] = Data(id.utf8)
-        // After-first-unlock (this-device-only) keeps analytics working while the
-        // device is locked; the device ID is a non-secret SHA256 of identifierForVendor.
+        // After-first-unlock keeps analytics working while the device is locked; the
+        // device ID is a non-secret hash, so it needs no stronger protection.
+        // This-device-only keeps it out of backups and off other devices, but a
+        // Keychain item still survives uninstall/reinstall on the same device.
+        // That is why the ID persists across reinstalls (see resetDeviceID()).
         addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
 
         let status = SecItemAdd(addQuery as CFDictionary, nil)

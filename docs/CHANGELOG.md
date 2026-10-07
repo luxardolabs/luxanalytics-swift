@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 First release of the `luxanalytics-swift` repository, which starts a new single-commit history. The 1.0.x versions belonged to the old history and are not reused. The Swift package, product, and module are still named `LuxAnalytics`.
 
+### Added
+- `LuxAnalytics.resetDeviceID()` replaces the device ID with a new random one. The ID lives in the Keychain and otherwise survives reinstalls; this lifecycle is now documented in [Privacy & Security](wiki/Privacy-Security.md#device-identifier)
+
 ### Changed
 - License changed from GPL-3.0 to MIT
 - Repository renamed to `luxardolabs/luxanalytics-swift`; install with `.package(url: "https://github.com/luxardolabs/luxanalytics-swift", from: "1.1.0")`

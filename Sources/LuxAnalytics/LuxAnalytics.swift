@@ -168,6 +168,18 @@ public final class LuxAnalytics: Sendable {
         await instance.sendBatch(eventsToSend)
     }
 
+    // MARK: - Device Identity
+
+    /// Replace this device's analytics ID with a new random one.
+    ///
+    /// The device ID lives in the Keychain, so by default it survives the app being
+    /// deleted and reinstalled. Call this when the user should get a fresh identity,
+    /// for example after they withdraw analytics consent or ask to reset their data.
+    /// Events already queued keep the old ID; events tracked afterwards carry the new one.
+    public static func resetDeviceID() async {
+        await AppAnalyticsContext.shared.resetDeviceID()
+    }
+
     // MARK: - Clear Queue
 
     public static func clearQueue() async {
