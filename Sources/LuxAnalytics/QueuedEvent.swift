@@ -7,6 +7,10 @@ public struct QueuedEvent: Codable, Sendable {
     public var retryCount: Int
     public var lastRetryAt: Date?
     public var lastAttemptAt: Date?
+    /// Earliest time this event may be sent again, after a failed attempt.
+    /// Nil for an event that has never failed. Decodes as nil from queues
+    /// persisted before this field existed.
+    public var notBefore: Date?
 
     public init(event: AnalyticsEvent) {
         self.event = event
@@ -14,6 +18,7 @@ public struct QueuedEvent: Codable, Sendable {
         self.retryCount = 0
         self.lastRetryAt = nil
         self.lastAttemptAt = nil
+        self.notBefore = nil
     }
 
     /// Check if event has expired based on TTL
@@ -36,15 +41,25 @@ public struct QueuedEvent: Codable, Sendable {
         return exponentialDelay + randomJitter
     }
 
-    /// Check if we should retry based on retry count and time since last retry
+    /// Whether the event has attempts left. Timing is not checked here: the queue
+    /// holds a backed-off event until `notBefore` (see `isReady(at:)`).
     func shouldRetry(maxRetries: Int) -> Bool {
-        guard retryCount < maxRetries else { return false }
+        retryCount < maxRetries
+    }
 
-        if let lastRetry = lastRetryAt {
-            let timeSinceLastRetry = Date().timeIntervalSince(lastRetry)
-            return timeSinceLastRetry >= nextRetryDelay()
-        }
+    /// Whether the event's backoff has elapsed.
+    func isReady(at now: Date) -> Bool {
+        guard let notBefore else { return true }
+        return now >= notBefore
+    }
 
-        return true
+    /// Record a failed send: count the attempt and schedule the next one with
+    /// exponential backoff. The jittered delay is computed once, here, so a later
+    /// check doesn't roll a different delay.
+    mutating func recordFailedAttempt(at now: Date = Date()) {
+        retryCount += 1
+        lastAttemptAt = now
+        lastRetryAt = now
+        notBefore = now.addingTimeInterval(nextRetryDelay())
     }
 }

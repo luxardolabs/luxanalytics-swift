@@ -20,7 +20,8 @@ First release of the `luxanalytics-swift` repository, which starts a new single-
 
 ### Fixed
 - **A 429 (rate limited) no longer drops events.** It was handled like any other 4xx, so the batch was discarded. It is now requeued without counting against the circuit breaker. A 408 is retried too. Other 4xx responses (400, 401, 404, 422) are still dropped, matching the server's ingest errors (server changelog 2026.10.0, LUXANALYTI-61)
-- `Retry-After` is honoured, as delay-seconds or an HTTP-date and capped at one hour: flushes to that endpoint wait until it has passed
+- **Retry backoff now works.** A failed event waits 2^n seconds (±25% jitter, max 5 minutes) before it is resent, and the queue sends ready events around it. Before, `nextRetryDelay()` was never applied and a failed batch went out again on the very next flush. `QueuedEvent` gains `notBefore`; queues persisted by older versions decode with it nil
+- - `Retry-After` is honoured, as delay-seconds or an HTTP-date and capped at one hour: flushes to that endpoint wait until it has passed
 - A non-HTTP response is now treated as a transport failure, so the batch is requeued. Before, its events were dropped silently
 - Compressing empty data returns nil instead of force-unwrapping a nil buffer
 

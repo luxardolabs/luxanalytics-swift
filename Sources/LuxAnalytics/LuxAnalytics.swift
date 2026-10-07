@@ -308,8 +308,7 @@ extension LuxAnalytics {
                 continue
             }
             var retry = queuedEvent
-            retry.retryCount += 1
-            retry.lastAttemptAt = Date()
+            retry.recordFailedAttempt()
             await LuxAnalyticsQueue.shared.enqueue(retry)
         }
         await LuxAnalyticsDiagnostics.shared.recordEventsFailed(count: events.count, error: cause)

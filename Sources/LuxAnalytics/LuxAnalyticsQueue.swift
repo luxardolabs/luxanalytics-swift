@@ -51,11 +51,24 @@ public actor LuxAnalyticsQueue {
         saveQueue()
     }
 
-    /// Dequeue events for sending
+    /// Dequeue up to `limit` events that are ready to send, in queue order.
+    /// Events still inside their retry backoff stay queued.
     public func dequeue(limit: Int) -> [QueuedEvent] {
-        let eventsToSend = Array(queueCache.prefix(limit))
+        dequeue(limit: limit, now: Date())
+    }
+
+    func dequeue(limit: Int, now: Date) -> [QueuedEvent] {
+        var eventsToSend: [QueuedEvent] = []
+        var remaining: [QueuedEvent] = []
+        for queuedEvent in queueCache {
+            if eventsToSend.count < limit && queuedEvent.isReady(at: now) {
+                eventsToSend.append(queuedEvent)
+            } else {
+                remaining.append(queuedEvent)
+            }
+        }
         if !eventsToSend.isEmpty {
-            queueCache.removeFirst(min(limit, queueCache.count))
+            queueCache = remaining
             saveQueue()
         }
         return eventsToSend
