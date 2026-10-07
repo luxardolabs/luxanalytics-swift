@@ -1,9 +1,20 @@
 import CryptoKit
-@preconcurrency import Foundation
+import Foundation
 
 #if canImport(UIKit)
 import UIKit
 #endif
+
+/// A NotificationCenter observer token that can cross into the actor.
+///
+/// `NSObjectProtocol` isn't `Sendable`, so the token can't be handed from the
+/// main actor (where it's registered) to `AnalyticsActor` (which keeps it) without
+/// a wrapper. `@unchecked` is sound here: the token is opaque, never mutated,
+/// and only ever passed back to `NotificationCenter.removeObserver(_:)`, which
+/// is thread-safe.
+struct ObserverToken: @unchecked Sendable {
+    let value: NSObjectProtocol
+}
 
 /// Actor that handles all analytics operations in a thread-safe manner
 actor AnalyticsActor {
@@ -11,7 +22,7 @@ actor AnalyticsActor {
     private var currentUserId: String?
     private var currentSessionId: String?
     private var flushTask: Task<Void, Never>?
-    private var notificationObservers: [NSObjectProtocol] = []
+    private var notificationObservers: [ObserverToken] = []
 
     init(configuration: LuxAnalyticsConfiguration) {
         self.configuration = configuration
@@ -64,7 +75,7 @@ actor AnalyticsActor {
                 await self?.handleAppBackground()
             }
         }
-        await self.addNotificationObserver(backgroundObserver)
+        await self.addNotificationObserver(ObserverToken(value: backgroundObserver))
 
         let terminateObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.willTerminateNotification,
@@ -75,7 +86,7 @@ actor AnalyticsActor {
                 await LuxAnalytics.flush()
             }
         }
-        await self.addNotificationObserver(terminateObserver)
+        await self.addNotificationObserver(ObserverToken(value: terminateObserver))
 
         // Memory warning handling
         let memoryObserver = NotificationCenter.default.addObserver(
@@ -87,7 +98,7 @@ actor AnalyticsActor {
                 await self?.handleMemoryWarning()
             }
         }
-        await self.addNotificationObserver(memoryObserver)
+        await self.addNotificationObserver(ObserverToken(value: memoryObserver))
     }
     #endif
 
@@ -124,14 +135,14 @@ actor AnalyticsActor {
         #endif
     }
 
-    private func addNotificationObserver(_ observer: NSObjectProtocol) {
+    private func addNotificationObserver(_ observer: ObserverToken) {
         notificationObservers.append(observer)
     }
 
     private func unregisterNotificationObservers() {
         // NotificationCenter.removeObserver is thread-safe — no need to hop to MainActor
         for observer in notificationObservers {
-            NotificationCenter.default.removeObserver(observer)
+            NotificationCenter.default.removeObserver(observer.value)
         }
         notificationObservers.removeAll()
     }
@@ -159,7 +170,7 @@ actor AnalyticsActor {
         #if canImport(UIKit)
         let observers = notificationObservers
         observers.forEach { observer in
-            NotificationCenter.default.removeObserver(observer)
+            NotificationCenter.default.removeObserver(observer.value)
         }
         #endif
         SecureLogger.log("AnalyticsActor deinit", category: .general, level: .debug)

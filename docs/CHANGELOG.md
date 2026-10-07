@@ -18,6 +18,9 @@ First release of the `luxanalytics-swift` repository, which starts a new single-
 - `trackWithRedaction(_:metadata:redactFields:)` no longer defaults `metadata`; a `trackWithRedaction(_:redactFields:)` overload covers the no-metadata call, so existing call sites compile unchanged
 - All `URLSession` use lives in `NetworkTransport.swift`. The request body is encoded directly with `JSONEncoder` (sorted keys) instead of a dictionary round trip; the wire format is unchanged
 
+- Privacy manifest declares only the required-reason API the SDK uses (UserDefaults, CA92.1). The FileTimestamp and SystemBootTime declarations were removed; neither API is called, directly or in the compiled binary
+- `AnalyticsActor` no longer needs `@preconcurrency import Foundation`: observer tokens cross into the actor in a documented `@unchecked Sendable` wrapper
+
 ### Fixed
 - **A 429 (rate limited) no longer drops events.** It was handled like any other 4xx, so the batch was discarded. It is now requeued without counting against the circuit breaker. A 408 is retried too. Other 4xx responses (400, 401, 404, 422) are still dropped, matching the server's ingest errors (server changelog 2026.10.0, LUXANALYTI-61)
 - **Retry backoff now works.** A failed event waits 2^n seconds (±25% jitter, max 5 minutes) before it is resent, and the queue sends ready events around it. Before, `nextRetryDelay()` was never applied and a failed batch went out again on the very next flush. `QueuedEvent` gains `notBefore`; queues persisted by older versions decode with it nil
