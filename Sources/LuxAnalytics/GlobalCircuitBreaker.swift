@@ -7,6 +7,11 @@ actor GlobalCircuitBreaker {
     /// Circuit breakers per URL
     private var circuitBreakers: [URL: CircuitBreaker] = [:]
 
+    /// When a URL may be sent to again, after the server asked the client to back off
+    /// (a 429 or 503 with `Retry-After`). This is separate from the breaker: the
+    /// server is up and has said when to come back.
+    private var notBefore: [URL: Date] = [:]
+
     /// Default configuration for new circuit breakers
     private let defaultConfig = (
         failureThreshold: 5,
@@ -23,6 +28,20 @@ actor GlobalCircuitBreaker {
         // it applies the resetTimeout and transitions open -> halfOpen, which is
         // what enables automatic recovery. Reading currentState would latch open forever.
         return await !breaker.shouldAllowRequest()
+    }
+
+    /// Hold requests to a URL until `date`. A later date replaces an earlier one, never the reverse.
+    func deferRequests(for url: URL, until date: Date) {
+        if let existing = notBefore[url], existing >= date { return }
+        notBefore[url] = date
+    }
+
+    /// Whether requests to a URL are being held for a server-requested back-off.
+    func isDeferred(for url: URL, now: Date = Date()) -> Bool {
+        guard let until = notBefore[url] else { return false }
+        if now < until { return true }
+        notBefore.removeValue(forKey: url)
+        return false
     }
 
     /// Record a successful request for a URL
@@ -54,12 +73,14 @@ actor GlobalCircuitBreaker {
 
     /// Reset circuit breaker for a specific URL
     func reset(for url: URL) async {
+        notBefore.removeValue(forKey: url)
         let breaker = getOrCreateBreaker(for: url)
         await breaker.reset()
     }
 
     /// Reset all circuit breakers
     func resetAll() async {
+        notBefore.removeAll()
         for breaker in circuitBreakers.values {
             await breaker.reset()
         }
@@ -67,11 +88,13 @@ actor GlobalCircuitBreaker {
 
     /// Remove circuit breaker for a URL
     func remove(for url: URL) {
+        notBefore.removeValue(forKey: url)
         circuitBreakers.removeValue(forKey: url)
     }
 
     /// Clear all circuit breakers
     func clear() {
+        notBefore.removeAll()
         circuitBreakers.removeAll()
     }
 

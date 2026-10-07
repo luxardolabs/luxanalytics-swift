@@ -147,6 +147,11 @@ public final class LuxAnalytics: Sendable {
         }
 
         // Don't flush if circuit breaker is open for this endpoint
+        if await GlobalCircuitBreaker.shared.isDeferred(for: config.apiURL) {
+            await instance.analyticsActor.debugLog("Server asked to back off from \(config.apiURL), skipping flush")
+            return
+        }
+
         if await GlobalCircuitBreaker.shared.isOpen(for: config.apiURL) {
             await instance.analyticsActor.debugLog("Circuit breaker open for \(config.apiURL), skipping flush")
             return
@@ -213,27 +218,61 @@ extension LuxAnalytics {
                 await analyticsActor.debugLog("Compressed payload: \(json.count) -> \(payload.count) bytes")
             }
 
-            let (statusCode, body) = try await NetworkTransport.send(payload, deflated: deflated, config: config)
-            switch statusCode {
-            case 200...299:
+            let response = try await NetworkTransport.send(payload, deflated: deflated, config: config)
+            let statusCode = response.statusCode
+            let body = response.body
+            if let retryAfter = response.retryAfter {
+                await GlobalCircuitBreaker.shared.deferRequests(
+                    for: config.apiURL, until: Date().addingTimeInterval(retryAfter))
+            }
+            switch Self.outcome(forStatus: statusCode) {
+            case .sent:
                 await handleSent(events, bytes: payload.count, config: config)
-            case 400...499:
-                // Client error: a retry would fail the same way, so the events are dropped.
+            case .rateLimited:
+                // The server is up and asked us to slow down: keep the events, and
+                // don't count it against the circuit breaker.
+                let error = Self.serverError(statusCode: statusCode, body: body)
+                await analyticsActor.debugLog("Rate limited: \(error)")
+                await handleRetryableFailure(events, error: error, cause: error, config: config, tripsBreaker: false)
+            case .retry:
+                let error = Self.serverError(statusCode: statusCode, body: body)
+                await analyticsActor.debugLog("Retryable server response: \(error)")
+                await handleRetryableFailure(events, error: error, cause: error, config: config)
+            case .drop:
+                // A retry would fail the same way, so the events are dropped.
                 let error = Self.serverError(statusCode: statusCode, body: body)
                 await analyticsActor.debugLog("Client error: \(error)")
                 for queuedEvent in events {
                     await LuxAnalytics.notifyEventsFailed([queuedEvent.event], error: error)
                 }
                 await LuxAnalyticsDiagnostics.shared.recordEventsFailed(count: events.count, error: error)
-            default:
-                let error = Self.serverError(statusCode: statusCode, body: body)
-                await analyticsActor.debugLog("Server error: \(error)")
-                await handleRetryableFailure(events, error: error, cause: error, config: config)
             }
         } catch {
             await analyticsActor.debugLog("Failed to send batch: \(error)")
             let luxError = (error as? LuxAnalyticsError) ?? .networkError(error)
             await handleRetryableFailure(events, error: luxError, cause: error, config: config)
+        }
+    }
+
+    /// What a batch's HTTP status means for its events.
+    enum SendOutcome: Equatable {
+        /// 2xx: delivered.
+        case sent
+        /// 429: rate limited. Requeue without tripping the circuit breaker.
+        case rateLimited
+        /// 408 or any 5xx (and anything unrecognised): requeue, and count it against the breaker.
+        case retry
+        /// Any other 4xx: the request itself is wrong (400, 401, 404, 422), so retrying can't help.
+        case drop
+    }
+
+    static func outcome(forStatus statusCode: Int) -> SendOutcome {
+        switch statusCode {
+        case 200...299: .sent
+        case 429: .rateLimited
+        case 408: .retry
+        case 400...499: .drop
+        default: .retry
         }
     }
 
@@ -247,15 +286,19 @@ extension LuxAnalytics {
         await LuxAnalyticsDiagnostics.shared.recordBytesTransmitted(bytes: bytes)
     }
 
-    /// A 5xx or a transport failure: count it against the circuit breaker, report it,
-    /// and requeue every event that still has retries left.
+    /// A 5xx, 408, 429 or transport failure: report it and requeue every event that
+    /// still has retries left. Everything but a rate limit also counts against the
+    /// circuit breaker.
     private func handleRetryableFailure(
         _ events: [QueuedEvent],
         error: LuxAnalyticsError,
         cause: any Error,
-        config: LuxAnalyticsConfiguration
+        config: LuxAnalyticsConfiguration,
+        tripsBreaker: Bool = true
     ) async {
-        await GlobalCircuitBreaker.shared.recordFailure(for: config.apiURL)
+        if tripsBreaker {
+            await GlobalCircuitBreaker.shared.recordFailure(for: config.apiURL)
+        }
         for queuedEvent in events {
             await LuxAnalytics.notifyEventsFailed([queuedEvent.event], error: error)
         }
