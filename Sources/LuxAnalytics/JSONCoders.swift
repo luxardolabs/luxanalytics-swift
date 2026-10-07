@@ -12,6 +12,14 @@ enum JSONCoders {
         return encoder
     }()
 
+    /// Encoder for request bodies sent to the server. Sorted keys keep the bytes
+    /// stable for the same event.
+    static let wireEncoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        return encoder
+    }()
+
     /// Shared JSON decoder for events
     static let decoder: JSONDecoder = {
         let decoder = JSONDecoder()

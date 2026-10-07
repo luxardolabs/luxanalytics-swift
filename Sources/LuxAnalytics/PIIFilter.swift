@@ -98,10 +98,8 @@ public enum PIIFilter {
         }
 
         // Check phone numbers
-        for pattern in phonePatterns {
-            if text.range(of: pattern, options: .regularExpression) != nil {
-                return true
-            }
+        if phonePatterns.contains(where: { text.range(of: $0, options: .regularExpression) != nil }) {
+            return true
         }
 
         // Check credit cards
@@ -115,10 +113,8 @@ public enum PIIFilter {
         }
 
         // Check IP addresses
-        for pattern in ipPatterns {
-            if text.range(of: pattern, options: .regularExpression) != nil {
-                return true
-            }
+        if ipPatterns.contains(where: { text.range(of: $0, options: .regularExpression) != nil }) {
+            return true
         }
 
         return false
@@ -128,10 +124,8 @@ public enum PIIFilter {
     public static func redactFields(_ metadata: [String: String], fields: Set<String>) -> [String: String] {
         var redacted = metadata
 
-        for field in fields {
-            if redacted[field] != nil {
-                redacted[field] = "[REDACTED]"
-            }
+        for field in fields where redacted[field] != nil {
+            redacted[field] = "[REDACTED]"
         }
 
         return redacted
@@ -162,8 +156,14 @@ extension LuxAnalytics {
     }
 
     /// Track an event with specific fields redacted
-    public func trackWithRedaction(_ name: String, metadata: [String: String] = [:], redactFields: Set<String>) async throws {
+    public func trackWithRedaction(_ name: String, metadata: [String: String], redactFields: Set<String>) async throws {
         let redactedMetadata = PIIFilter.redactFields(metadata, fields: redactFields)
         try await track(name, metadata: redactedMetadata)
+    }
+
+    /// Track an event with no metadata. Kept as an overload, not a default argument,
+    /// so `metadata:` stays where existing callers put it.
+    public func trackWithRedaction(_ name: String, redactFields: Set<String>) async throws {
+        try await trackWithRedaction(name, metadata: [:], redactFields: redactFields)
     }
 }

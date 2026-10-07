@@ -1,7 +1,7 @@
 import Foundation
 
 /// LuxAnalytics SDK version information
-public struct LuxAnalyticsVersion {
+public enum LuxAnalyticsVersion {
     /// Current SDK version
     public static let current = "1.1.0"
 

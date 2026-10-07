@@ -24,7 +24,7 @@ public final class LuxAnalytics: Sendable {
                     ⚠️ LuxAnalytics.initialize() must be called before accessing shared instance.
 
                     This usually happens when:
-                    1. A @StateObject initializer uses LuxAnalytics
+                    1. A view model's initializer uses LuxAnalytics
                     2. A static property initializes before your App.init()
                     3. A singleton's init() method tracks analytics
 
@@ -160,8 +160,7 @@ public final class LuxAnalytics: Sendable {
 
         await instance.analyticsActor.debugLog("Flushing \(eventsToSend.count) events...")
 
-        let urlSession = URLSession.analyticsSession(with: config.certificatePinning)
-        await instance.sendBatch(eventsToSend, using: urlSession)
+        await instance.sendBatch(eventsToSend)
     }
 
     // MARK: - Clear Queue
@@ -195,174 +194,123 @@ public final class LuxAnalytics: Sendable {
     }
 }
 
-// MARK: - Event Stream Notifications
-
 // MARK: - Batch Sending
 
 extension LuxAnalytics {
+    /// The batch wire shape, `{"events": [...]}`. A single event is sent bare.
+    struct BatchPayload: Encodable {
+        let events: [AnalyticsEvent]
+    }
 
-    private func sendBatch(_ events: [QueuedEvent], using session: URLSession) async {
+    private func sendBatch(_ events: [QueuedEvent]) async {
         guard let config = await LuxAnalyticsStorage.shared.getConfiguration() else { return }
 
         do {
-            // Prepare the payload
-            let batchPayload: [String: Any]
-            if events.count == 1 {
-                // Single event - send as is
-                batchPayload = try events[0].event.toDictionary()
-            } else {
-                // Multiple events - wrap in batch
-                let eventDicts = try events.map { try $0.event.toDictionary() }
-                batchPayload = ["events": eventDicts]
+            let json = try Self.encodePayload(events)
+            let deflated = config.compressionEnabled && json.count >= config.compressionThreshold
+            let payload = deflated ? try Self.deflate(json) : json
+            if deflated {
+                await analyticsActor.debugLog("Compressed payload: \(json.count) -> \(payload.count) bytes")
             }
 
-            let jsonData = try JSONSerialization.data(withJSONObject: batchPayload, options: .sortedKeys)
-
-            // Check compression
-            let shouldCompress = config.compressionEnabled && jsonData.count >= config.compressionThreshold
-            let payloadData: Data
-
-            if shouldCompress {
-                guard let compressed = jsonData.zlibCompressed() else {
-                    throw LuxAnalyticsError.encodingError(
-                        NSError(domain: "LuxAnalytics", code: -1, userInfo: [NSLocalizedDescriptionKey: "Compression failed"]))
+            let (statusCode, body) = try await NetworkTransport.send(payload, deflated: deflated, config: config)
+            switch statusCode {
+            case 200...299:
+                await handleSent(events, bytes: payload.count, config: config)
+            case 400...499:
+                // Client error: a retry would fail the same way, so the events are dropped.
+                let error = Self.serverError(statusCode: statusCode, body: body)
+                await analyticsActor.debugLog("Client error: \(error)")
+                for queuedEvent in events {
+                    await LuxAnalytics.notifyEventsFailed([queuedEvent.event], error: error)
                 }
-                payloadData = compressed
-                await analyticsActor.debugLog("Compressed payload: \(jsonData.count) -> \(compressed.count) bytes")
-            } else {
-                payloadData = jsonData
+                await LuxAnalyticsDiagnostics.shared.recordEventsFailed(count: events.count, error: error)
+            default:
+                let error = Self.serverError(statusCode: statusCode, body: body)
+                await analyticsActor.debugLog("Server error: \(error)")
+                await handleRetryableFailure(events, error: error, cause: error, config: config)
             }
-
-            // Create the request
-            var request = URLRequest(url: config.apiURL.appendingPathComponent(config.projectId))
-            request.httpMethod = "POST"
-            request.httpBody = payloadData
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue(LuxAnalyticsVersion.fullVersion, forHTTPHeaderField: "User-Agent")
-
-            if shouldCompress {
-                request.setValue("deflate", forHTTPHeaderField: "Content-Encoding")
-            }
-
-            // Add Basic Auth header
-            let authString = "\(config.publicId):"
-            if let authData = authString.data(using: .utf8) {
-                let base64Auth = authData.base64EncodedString()
-                request.setValue("Basic \(base64Auth)", forHTTPHeaderField: "Authorization")
-            }
-
-            request.timeoutInterval = config.requestTimeout
-
-            // Send the request
-            let (data, response) = try await session.data(for: request)
-
-            // Handle response
-            if let httpResponse = response as? HTTPURLResponse {
-                switch httpResponse.statusCode {
-                case 200...299:
-                    await analyticsActor.debugLog("Successfully sent \(events.count) events")
-                    await GlobalCircuitBreaker.shared.recordSuccess(for: config.apiURL)
-
-                    // Notify success for each event
-                    for queuedEvent in events {
-                        await LuxAnalytics.notifyEventsSent([queuedEvent.event])
-                    }
-
-                    // Update diagnostics
-                    await LuxAnalyticsDiagnostics.shared.recordEventsSent(count: events.count)
-                    await LuxAnalyticsDiagnostics.shared.recordBytesTransmitted(bytes: payloadData.count)
-
-                case 400...499:
-                    // Client error - don't retry
-                    // Redact the response body before it enters the public error:
-                    // it can reach SDK consumers via eventsFailed and may contain PII.
-                    let responseString = String(data: data, encoding: .utf8).map(SecureLogger.redact)
-                    let error = LuxAnalyticsError.serverError(statusCode: httpResponse.statusCode, response: responseString)
-                    await analyticsActor.debugLog("Client error: \(error)")
-
-                    // Drop events as they won't succeed
-                    for queuedEvent in events {
-                        let luxError = error
-                        await LuxAnalytics.notifyEventsFailed([queuedEvent.event], error: luxError)
-                    }
-
-                    await LuxAnalyticsDiagnostics.shared.recordEventsFailed(count: events.count, error: error)
-
-                default:
-                    // Server error - will retry
-                    // Redact the response body before it enters the public error:
-                    // it can reach SDK consumers via eventsFailed and may contain PII.
-                    let responseString = String(data: data, encoding: .utf8).map(SecureLogger.redact)
-                    let error = LuxAnalyticsError.serverError(statusCode: httpResponse.statusCode, response: responseString)
-                    await analyticsActor.debugLog("Server error: \(error)")
-
-                    await GlobalCircuitBreaker.shared.recordFailure(for: config.apiURL)
-
-                    // Notify failure for all events in this batch
-                    for queuedEvent in events {
-                        await LuxAnalytics.notifyEventsFailed([queuedEvent.event], error: error)
-                    }
-
-                    // Requeue events for retry if under max attempts
-                    for queuedEvent in events {
-                        if queuedEvent.shouldRetry(maxRetries: config.maxRetryAttempts) {
-                            var updatedEvent = queuedEvent
-                            updatedEvent.retryCount += 1
-                            updatedEvent.lastAttemptAt = Date()
-                            await LuxAnalyticsQueue.shared.enqueue(updatedEvent)
-                        } else {
-                            await LuxAnalytics.notifyEventsDropped(count: 1, reason: .dropOldest)
-                        }
-                    }
-
-                    await LuxAnalyticsDiagnostics.shared.recordEventsFailed(count: events.count, error: error)
-                }
-            }
-
         } catch {
-            let luxError = (error as? LuxAnalyticsError) ?? .networkError(error)
             await analyticsActor.debugLog("Failed to send batch: \(error)")
-            await GlobalCircuitBreaker.shared.recordFailure(for: config.apiURL)
-
-            // Notify failure for all events in this batch
-            for queuedEvent in events {
-                await LuxAnalytics.notifyEventsFailed([queuedEvent.event], error: luxError)
-            }
-
-            // Requeue events for retry
-            for queuedEvent in events {
-                if queuedEvent.shouldRetry(maxRetries: config.maxRetryAttempts) {
-                    var updatedEvent = queuedEvent
-                    updatedEvent.retryCount += 1
-                    updatedEvent.lastAttemptAt = Date()
-                    await LuxAnalyticsQueue.shared.enqueue(updatedEvent)
-                } else {
-                    await LuxAnalytics.notifyEventsDropped(count: 1, reason: .dropOldest)
-                }
-            }
-
-            await LuxAnalyticsDiagnostics.shared.recordEventsFailed(count: events.count, error: error)
+            let luxError = (error as? LuxAnalyticsError) ?? .networkError(error)
+            await handleRetryableFailure(events, error: luxError, cause: error, config: config)
         }
+    }
+
+    private func handleSent(_ events: [QueuedEvent], bytes: Int, config: LuxAnalyticsConfiguration) async {
+        await analyticsActor.debugLog("Successfully sent \(events.count) events")
+        await GlobalCircuitBreaker.shared.recordSuccess(for: config.apiURL)
+        for queuedEvent in events {
+            await LuxAnalytics.notifyEventsSent([queuedEvent.event])
+        }
+        await LuxAnalyticsDiagnostics.shared.recordEventsSent(count: events.count)
+        await LuxAnalyticsDiagnostics.shared.recordBytesTransmitted(bytes: bytes)
+    }
+
+    /// A 5xx or a transport failure: count it against the circuit breaker, report it,
+    /// and requeue every event that still has retries left.
+    private func handleRetryableFailure(
+        _ events: [QueuedEvent],
+        error: LuxAnalyticsError,
+        cause: any Error,
+        config: LuxAnalyticsConfiguration
+    ) async {
+        await GlobalCircuitBreaker.shared.recordFailure(for: config.apiURL)
+        for queuedEvent in events {
+            await LuxAnalytics.notifyEventsFailed([queuedEvent.event], error: error)
+        }
+        for queuedEvent in events {
+            guard queuedEvent.shouldRetry(maxRetries: config.maxRetryAttempts) else {
+                await LuxAnalytics.notifyEventsDropped(count: 1, reason: .dropOldest)
+                continue
+            }
+            var retry = queuedEvent
+            retry.retryCount += 1
+            retry.lastAttemptAt = Date()
+            await LuxAnalyticsQueue.shared.enqueue(retry)
+        }
+        await LuxAnalyticsDiagnostics.shared.recordEventsFailed(count: events.count, error: cause)
+    }
+
+    /// The request body: one event bare, several wrapped as `{"events": [...]}`.
+    static func encodePayload(_ events: [QueuedEvent]) throws -> Data {
+        if events.count == 1 {
+            return try JSONCoders.wireEncoder.encode(events[0].event)
+        }
+        return try JSONCoders.wireEncoder.encode(BatchPayload(events: events.map(\.event)))
+    }
+
+    private static func deflate(_ json: Data) throws -> Data {
+        guard let compressed = json.zlibCompressed() else {
+            let reason = [NSLocalizedDescriptionKey: "Compression failed"]
+            throw LuxAnalyticsError.encodingError(NSError(domain: "LuxAnalytics", code: -1, userInfo: reason))
+        }
+        return compressed
+    }
+
+    /// Redacts the response body before it enters the public error: it can reach
+    /// SDK consumers via eventsFailed and may contain PII.
+    private static func serverError(statusCode: Int, body: Data) -> LuxAnalyticsError {
+        let response = String(data: body, encoding: .utf8).map(SecureLogger.redact)
+        return .serverError(statusCode: statusCode, response: response)
     }
 }
 
 // MARK: - Compression
 
 extension Data {
+    /// Raw DEFLATE (RFC 1951). Apple's COMPRESSION_ZLIB writes no zlib header,
+    /// so the server inflates it with its raw-deflate fallback.
     func zlibCompressed() -> Data? {
-        return self.withUnsafeBytes { bytes in
-            let buffer = UnsafeBufferPointer<UInt8>(start: bytes.bindMemory(to: UInt8.self).baseAddress, count: self.count)
-            let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: count)
-            defer { destinationBuffer.deallocate() }
+        guard !isEmpty else { return nil }
+        let destination = UnsafeMutablePointer<UInt8>.allocate(capacity: count)
+        defer { destination.deallocate() }
 
-            let compressedSize = compression_encode_buffer(
-                destinationBuffer, count,
-                buffer.baseAddress!, count,
-                nil, COMPRESSION_ZLIB
-            )
-
-            guard compressedSize > 0 else { return nil }
-            return Data(bytes: destinationBuffer, count: compressedSize)
+        let compressedSize = withUnsafeBytes { source -> Int in
+            guard let base = source.bindMemory(to: UInt8.self).baseAddress else { return 0 }
+            return compression_encode_buffer(destination, count, base, count, nil, COMPRESSION_ZLIB)
         }
+        guard compressedSize > 0 else { return nil }
+        return Data(bytes: destination, count: compressedSize)
     }
 }

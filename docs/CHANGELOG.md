@@ -13,6 +13,18 @@ First release of the `luxanalytics-swift` repository, which starts a new single-
 - License changed from GPL-3.0 to MIT
 - Repository renamed to `luxardolabs/luxanalytics-swift`; install with `.package(url: "https://github.com/luxardolabs/luxanalytics-swift", from: "1.1.0")`
 - README links to the [server](https://github.com/luxardolabs/luxanalytics) and its event-format spec
+- `LuxAnalyticsVersion`, `AsyncTimer` and `LuxAnalyticsDebug` are caseless enums instead of structs. They only ever had static members, so this only affects code that instantiated them, which did nothing
+- `LuxAnalyticsDebug` reports go to the unified log (`os.Logger`, subsystem `com.luxardolabs.LuxAnalytics`, category `Debug`, notice level) instead of `print()`. They still show in Xcode's console
+- `trackWithRedaction(_:metadata:redactFields:)` no longer defaults `metadata`; a `trackWithRedaction(_:redactFields:)` overload covers the no-metadata call, so existing call sites compile unchanged
+- All `URLSession` use lives in `NetworkTransport.swift`. The request body is encoded directly with `JSONEncoder` (sorted keys) instead of a dictionary round trip; the wire format is unchanged
+
+### Fixed
+- A non-HTTP response is now treated as a transport failure, so the batch is requeued. Before, its events were dropped silently
+- Compressing empty data returns nil instead of force-unwrapping a nil buffer
+
+### Tests
+- Suites that share global singletons are nested under one serialized parent. Before, they raced each other in parallel and failed intermittently
+- New wire-payload tests: a single event is sent bare, a batch is wrapped in `events`, keys are sorted, and compression round-trips as raw DEFLATE
 
 ## [1.0.2] - 2026-06-30
 

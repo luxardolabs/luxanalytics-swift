@@ -1,11 +1,16 @@
 import Foundation
+import os
+
+/// These reports are requested explicitly, so they log at notice level and show in
+/// Xcode's console and Console.app whether or not `debugLogging` is on.
+private let debugReport = Logger(subsystem: "com.luxardolabs.LuxAnalytics", category: "Debug")
 
 /// Debug utilities for LuxAnalytics troubleshooting
-public struct LuxAnalyticsDebug {
+public enum LuxAnalyticsDebug {
 
     /// Check current status of LuxAnalytics
     public static func status() async {
-        print(
+        let report =
             """
 
             ========== LuxAnalytics Status ==========
@@ -25,7 +30,8 @@ public struct LuxAnalyticsDebug {
 
             =========================================
 
-            """)
+            """
+        debugReport.notice("\(report, privacy: .public)")
     }
 
     private static func queueDescription() async -> String {
@@ -43,7 +49,7 @@ public struct LuxAnalyticsDebug {
 
     /// Validate common setup issues
     public static func validateSetup() async {
-        print(
+        let report =
             """
 
             ========== LuxAnalytics Setup Validation ==========
@@ -68,12 +74,13 @@ public struct LuxAnalyticsDebug {
               - Verify DSN format is correct
             ===================================================
 
-            """)
+            """
+        debugReport.notice("\(report, privacy: .public)")
     }
 
-    /// Print sample initialization code
+    /// Log sample initialization code
     public static func printSampleCode() {
-        print(
+        let report =
             """
 
             ========== Sample LuxAnalytics Setup ==========
@@ -114,7 +121,8 @@ public struct LuxAnalyticsDebug {
 
             ==============================================
 
-            """)
+            """
+        debugReport.notice("\(report, privacy: .public)")
     }
 }
 

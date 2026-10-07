@@ -22,11 +22,4 @@ public struct AnalyticsEvent: Codable, Sendable {
         case userId = "user_id"
         case sessionId = "session_id"
     }
-
-    func toDictionary() throws -> [String: Any] {
-        let encoder = JSONEncoder()
-        let data = try encoder.encode(self)
-        let json = try JSONSerialization.jsonObject(with: data)
-        return json as! [String: Any]
-    }
 }

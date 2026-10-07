@@ -3,7 +3,7 @@ import Foundation
 @testable import LuxAnalytics
 
 /// Test helper to reset LuxAnalytics state between tests
-struct LuxAnalyticsTestHelper {
+enum LuxAnalyticsTestHelper {
     static func reset() async {
         // Clear the storage through the actor
         await LuxAnalyticsStorage.shared.setInstance(nil)

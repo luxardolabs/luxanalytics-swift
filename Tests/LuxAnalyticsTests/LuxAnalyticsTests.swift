@@ -243,12 +243,11 @@ extension GlobalStateTests {
 @Suite
 struct LuxAnalyticsErrorTests {
     @Test func serverErrorEqualityConsidersCodeAndResponse() {
-        #expect(
-            LuxAnalyticsError.serverError(statusCode: 500, response: "x")
-                == LuxAnalyticsError.serverError(statusCode: 500, response: "x"))
-        #expect(
-            LuxAnalyticsError.serverError(statusCode: 500, response: "x")
-                != LuxAnalyticsError.serverError(statusCode: 500, response: "y"))
+        let first = LuxAnalyticsError.serverError(statusCode: 500, response: "x")
+        let sameCodeAndResponse = LuxAnalyticsError.serverError(statusCode: 500, response: "x")
+        let otherResponse = LuxAnalyticsError.serverError(statusCode: 500, response: "y")
+        #expect(first == sameCodeAndResponse)
+        #expect(first != otherResponse)
     }
 
     @Test func errorDescriptionIncludesStatusCode() {
@@ -393,11 +392,61 @@ extension GlobalStateTests {
 @Suite
 struct NetworkMonitorTests {
     @Test func sharedReturnsSingleton() {
-        #expect(NetworkMonitor.shared === NetworkMonitor.shared)
+        let first = NetworkMonitor.shared
+        let second = NetworkMonitor.shared
+        #expect(first === second)
     }
 
     @Test func exposesConnectionProperties() async {
         _ = await NetworkMonitor.shared.isConnected
         _ = await NetworkMonitor.shared.isExpensive
+    }
+}
+
+// MARK: - Wire payload
+
+@Suite
+struct WirePayloadTests {
+    private func queued(_ name: String) -> QueuedEvent {
+        QueuedEvent(
+            event: AnalyticsEvent(
+                name: name, timestamp: "2026-01-01T00:00:00Z", userId: "u1", sessionId: nil, metadata: ["k": "v"]))
+    }
+
+    @Test func singleEventIsSentBare() throws {
+        let data = try LuxAnalytics.encodePayload([queued("screen_view")])
+        let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(object["name"] as? String == "screen_view")
+        #expect(object["user_id"] as? String == "u1")
+        #expect(object["session_id"] == nil)
+        #expect(object["events"] == nil)
+    }
+
+    @Test func severalEventsAreWrappedInEvents() throws {
+        let data = try LuxAnalytics.encodePayload([queued("a"), queued("b")])
+        let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let events = try #require(object["events"] as? [[String: Any]])
+        #expect(events.map { $0["name"] as? String } == ["a", "b"])
+    }
+
+    @Test func keysAreSorted() throws {
+        let data = try LuxAnalytics.encodePayload([queued("a")])
+        let json = try #require(String(data: data, encoding: .utf8))
+        let keys = ["\"id\"", "\"metadata\"", "\"name\"", "\"timestamp\"", "\"user_id\""]
+        let offsets = keys.compactMap { json.range(of: $0)?.lowerBound }
+        #expect(offsets.count == keys.count)
+        #expect(offsets == offsets.sorted())
+    }
+
+    @Test func compressionRoundTripsAsRawDeflate() throws {
+        let original = Data(String(repeating: "{\"name\":\"screen_view\"}", count: 64).utf8)
+        let compressed = try #require(original.zlibCompressed())
+        #expect(compressed.count < original.count)
+        let restored = try (compressed as NSData).decompressed(using: .zlib) as Data
+        #expect(restored == original)
+    }
+
+    @Test func emptyDataDoesNotCompress() {
+        #expect(Data().zlibCompressed() == nil)
     }
 }

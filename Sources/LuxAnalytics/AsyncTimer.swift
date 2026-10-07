@@ -1,7 +1,7 @@
 import Foundation
 
 /// Modern async timer implementation for iOS 18+
-public struct AsyncTimer {
+public enum AsyncTimer {
     /// Create a timer using Duration API
     /// - Parameters:
     ///   - duration: Time interval between fires
