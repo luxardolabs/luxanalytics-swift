@@ -1,5 +1,5 @@
-import Compression
 import Foundation
+import zlib
 
 #if canImport(UIKit)
 import UIKit
@@ -353,18 +353,25 @@ extension LuxAnalytics {
 // MARK: - Compression
 
 extension Data {
-    /// Raw DEFLATE (RFC 1951). Apple's COMPRESSION_ZLIB writes no zlib header,
-    /// so the server inflates it with its raw-deflate fallback.
+    /// zlib format (RFC 1950): what HTTP `Content-Encoding: deflate` means (RFC 9110 §8.4.1.2).
+    ///
+    /// Uses the system zlib, not the Compression framework: its COMPRESSION_ZLIB
+    /// writes raw DEFLATE (RFC 1951) with no zlib wrapper, which doesn't match the header.
     func zlibCompressed() -> Data? {
         guard !isEmpty else { return nil }
-        let destination = UnsafeMutablePointer<UInt8>.allocate(capacity: count)
-        defer { destination.deallocate() }
+        var compressedSize = compressBound(uLong(count))
+        var destination = Data(count: Int(compressedSize))
 
-        let compressedSize = withUnsafeBytes { source -> Int in
-            guard let base = source.bindMemory(to: UInt8.self).baseAddress else { return 0 }
-            return compression_encode_buffer(destination, count, base, count, nil, COMPRESSION_ZLIB)
+        let status = destination.withUnsafeMutableBytes { output -> Int32 in
+            withUnsafeBytes { input -> Int32 in
+                guard let target = output.bindMemory(to: Bytef.self).baseAddress,
+                    let source = input.bindMemory(to: Bytef.self).baseAddress
+                else { return Z_BUF_ERROR }
+                return compress2(target, &compressedSize, source, uLong(count), Z_DEFAULT_COMPRESSION)
+            }
         }
-        guard compressedSize > 0 else { return nil }
-        return Data(bytes: destination, count: compressedSize)
+        guard status == Z_OK else { return nil }
+        destination.count = Int(compressedSize)
+        return destination
     }
 }

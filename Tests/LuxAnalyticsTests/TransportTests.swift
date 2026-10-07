@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import zlib
 
 @testable import LuxAnalytics
 
@@ -64,12 +65,33 @@ struct WirePayloadTests {
         #expect(restored.event.id == event.event.id)
     }
 
-    @Test func compressionRoundTripsAsRawDeflate() throws {
+    @Test func compressionIsZlibWrapped() throws {
         let original = Data(String(repeating: "{\"name\":\"screen_view\"}", count: 64).utf8)
         let compressed = try #require(original.zlibCompressed())
         #expect(compressed.count < original.count)
-        let restored = try (compressed as NSData).decompressed(using: .zlib) as Data
-        #expect(restored == original)
+        // RFC 1950 header: CM = 8 (deflate), and CMF*256 + FLG is a multiple of 31.
+        #expect(compressed[0] & 0x0F == 8)
+        #expect((UInt16(compressed[0]) << 8 | UInt16(compressed[1])).isMultiple(of: 31))
+        // zlib's uncompress() only accepts the wrapped format, so it rejects raw DEFLATE.
+        var restoredSize = uLong(original.count)
+        var restored = Data(count: original.count)
+        let status = restored.withUnsafeMutableBytes { output in
+            compressed.withUnsafeBytes { input in
+                uncompress(
+                    output.bindMemory(to: Bytef.self).baseAddress, &restoredSize,
+                    input.bindMemory(to: Bytef.self).baseAddress, uLong(compressed.count))
+            }
+        }
+        #expect(status == Z_OK)
+        #expect(restored.prefix(Int(restoredSize)) == original)
+    }
+
+    @Test func incompressibleDataStillCompresses() throws {
+        // The old Compression-framework path sized its buffer to the input, so data
+        // that grows under compression failed outright.
+        var generator = SystemRandomNumberGenerator()
+        let random = Data((0..<256).map { _ in UInt8.random(in: 0...255, using: &generator) })
+        #expect(random.zlibCompressed() != nil)
     }
 
     @Test func emptyDataDoesNotCompress() {

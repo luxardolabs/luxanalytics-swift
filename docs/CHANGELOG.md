@@ -29,12 +29,14 @@ First release of the `luxanalytics-swift` repository, which starts a new single-
 - **Retry backoff now works.** A failed event waits 2^n seconds (±25% jitter, max 5 minutes) before it is resent, and the queue sends ready events around it. Before, `nextRetryDelay()` was never applied and a failed batch went out again on the very next flush. `QueuedEvent` gains `notBefore`; queues persisted by older versions decode with it nil
 - - `Retry-After` is honoured, as delay-seconds or an HTTP-date and capped at one hour: flushes to that endpoint wait until it has passed
 - A non-HTTP response is now treated as a transport failure, so the batch is requeued. Before, its events were dropped silently
+- **Compressed bodies are now zlib format (RFC 1950)**, which is what `Content-Encoding: deflate` means (RFC 9110 §8.4.1.2). The SDK used the Compression framework's `COMPRESSION_ZLIB`, which writes raw DEFLATE (RFC 1951) with no zlib wrapper, so the body didn't match its header and the server only accepted it through a raw-DEFLATE fallback. It now uses the system zlib (`compress2`)
+- Payloads that don't shrink when compressed (already-compressed or random data) no longer fail to compress; the output buffer is sized with `compressBound`
 - Compressing empty data returns nil instead of force-unwrapping a nil buffer
 
 ### Tests
 - Suites that share global singletons are nested under one serialized parent. Before, they raced each other in parallel and failed intermittently
 - The event `id` is pinned as the server's idempotency key: tests check it is sent, unchanged across retries and through queue persistence
-- New wire-payload tests: a single event is sent bare, a batch is wrapped in `events`, keys are sorted, and compression round-trips as raw DEFLATE
+- New wire-payload tests: a single event is sent bare, a batch is wrapped in `events`, keys are sorted, and compression produces zlib format (RFC 1950)
 
 ## [1.0.2] - 2026-06-30
 
