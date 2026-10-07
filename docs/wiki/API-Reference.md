@@ -64,13 +64,9 @@ func setUser(_ userId: String?) async
 
 // Set current session ID  
 func setSession(_ sessionId: String?) async
-
-// Get current user ID
-func getCurrentUser() async -> String?
-
-// Get current session ID
-func getCurrentSession() async -> String?
 ```
+
+Both are write-only. The SDK has no getters for the current user or session, so keep them in your app if you need to read them back.
 
 #### Device Identity
 
@@ -288,20 +284,21 @@ for await notification in LuxAnalyticsEvents.eventStream {
 Development and debugging utilities.
 
 ```swift
-struct LuxAnalyticsDebug {
-    // Validate current setup
+enum LuxAnalyticsDebug {
+    // Log a setup checklist
     static func validateSetup() async
-    
-    // Print current status
+
+    // Log initialization, queue, network and enabled status
     static func status() async
-    
-    // Print queue contents (debug builds only)
-    static func printQueue() async
-    
-    // Simulate network failure (debug builds only)
-    static func simulateNetworkFailure() async
+
+    // Log sample initialization code
+    static func printSampleCode()
 }
 ```
+
+These write to the unified log (subsystem `com.luxardolabs.LuxAnalytics`, category `Debug`) at notice level, so the output appears in Xcode's console and Console.app whether or not `debugLogging` is on.
+
+For queue contents, use `LuxAnalytics.getQueueStats()`. For counters, use `LuxAnalytics.getMetrics()`.
 
 ## Certificate Pinning
 
