@@ -165,7 +165,9 @@ public final class LuxAnalytics: Sendable {
 
         await instance.analyticsActor.debugLog("Flushing \(eventsToSend.count) events...")
 
+        let started = Date()
         await instance.sendBatch(eventsToSend)
+        await LuxAnalyticsDiagnostics.shared.recordFlushDuration(Date().timeIntervalSince(started))
     }
 
     // MARK: - Device Identity
@@ -223,13 +225,7 @@ extension LuxAnalytics {
         guard let config = await LuxAnalyticsStorage.shared.getConfiguration() else { return }
 
         do {
-            let json = try Self.encodePayload(events)
-            let deflated = config.compressionEnabled && json.count >= config.compressionThreshold
-            let payload = deflated ? try Self.deflate(json) : json
-            if deflated {
-                await analyticsActor.debugLog("Compressed payload: \(json.count) -> \(payload.count) bytes")
-            }
-
+            let (payload, deflated) = try await preparePayload(events, config: config)
             let response = try await NetworkTransport.send(payload, deflated: deflated, config: config)
             let statusCode = response.statusCode
             let body = response.body
@@ -239,7 +235,7 @@ extension LuxAnalytics {
             }
             switch Self.outcome(forStatus: statusCode) {
             case .sent:
-                await handleSent(events, bytes: payload.count, config: config)
+                await handleSent(events, config: config)
             case .rateLimited:
                 // The server is up and asked us to slow down: keep the events, and
                 // don't count it against the circuit breaker.
@@ -258,6 +254,7 @@ extension LuxAnalytics {
                     await LuxAnalytics.notifyEventsFailed([queuedEvent.event], error: error)
                 }
                 await LuxAnalyticsDiagnostics.shared.recordEventsFailed(count: events.count, error: error)
+                await LuxAnalyticsDiagnostics.shared.recordBatchFailed()
             }
         } catch {
             await analyticsActor.debugLog("Failed to send batch: \(error)")
@@ -288,14 +285,33 @@ extension LuxAnalytics {
         }
     }
 
-    private func handleSent(_ events: [QueuedEvent], bytes: Int, config: LuxAnalyticsConfiguration) async {
+    /// Encode the batch and compress it when it's over the threshold, recording its
+    /// size and the compression time in the diagnostics.
+    private func preparePayload(
+        _ events: [QueuedEvent],
+        config: LuxAnalyticsConfiguration
+    ) async throws -> (payload: Data, deflated: Bool) {
+        let json = try Self.encodePayload(events)
+        guard config.compressionEnabled && json.count >= config.compressionThreshold else {
+            await LuxAnalyticsDiagnostics.shared.recordPayloadSize(json.count, compressedSize: nil)
+            return (json, false)
+        }
+        let started = Date()
+        let compressed = try Self.deflate(json)
+        await LuxAnalyticsDiagnostics.shared.recordCompressionTime(Date().timeIntervalSince(started))
+        await LuxAnalyticsDiagnostics.shared.recordPayloadSize(json.count, compressedSize: compressed.count)
+        await analyticsActor.debugLog("Compressed payload: \(json.count) -> \(compressed.count) bytes")
+        return (compressed, true)
+    }
+
+    private func handleSent(_ events: [QueuedEvent], config: LuxAnalyticsConfiguration) async {
         await analyticsActor.debugLog("Successfully sent \(events.count) events")
         await GlobalCircuitBreaker.shared.recordSuccess(for: config.apiURL)
         for queuedEvent in events {
             await LuxAnalytics.notifyEventsSent([queuedEvent.event])
         }
         await LuxAnalyticsDiagnostics.shared.recordEventsSent(count: events.count)
-        await LuxAnalyticsDiagnostics.shared.recordBytesTransmitted(bytes: bytes)
+        await LuxAnalyticsDiagnostics.shared.recordBatchSent()
     }
 
     /// A 5xx, 408, 429 or transport failure: report it and requeue every event that
@@ -324,6 +340,7 @@ extension LuxAnalytics {
             await LuxAnalyticsQueue.shared.enqueue(retry)
         }
         await LuxAnalyticsDiagnostics.shared.recordEventsFailed(count: events.count, error: cause)
+        await LuxAnalyticsDiagnostics.shared.recordBatchFailed()
     }
 
     /// The request body: one event bare, several wrapped as `{"events": [...]}`.

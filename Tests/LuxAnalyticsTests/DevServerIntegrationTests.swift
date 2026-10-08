@@ -105,6 +105,41 @@ extension GlobalStateTests {
             #expect(await LuxAnalyticsQueue.shared.queueSize == 0)
             let metrics = try #require(await LuxAnalytics.getMetrics())
             #expect(metrics.networkStats.totalEventsSent == 1)
+            #expect(metrics.networkStats.totalBatchesSent == 1)
+            #expect(metrics.networkStats.averagePayloadSize > 0)
+            #expect(metrics.performanceStats.averageFlushDuration > 0)
+        }
+    }
+
+    // Runs with only LUXANALYTICS_DEV_URL: the real server refuses unknown credentials,
+    // which exercises the whole track -> flush -> drop path and its metrics today.
+    @Suite(
+        .serialized,
+        .enabled(if: DevServer.baseURL != nil, "LUXANALYTICS_DEV_URL not set; run `make integration`"))
+    struct DevServerEndToEndRejectionTests {
+        @Test func aRefusedBatchIsDroppedAndRecorded() async throws {
+            await LuxAnalyticsTestHelper.reset()
+            let base = try #require(DevServer.baseURL)
+            let config = try LuxAnalyticsConfiguration(
+                dsn: base.replacingOccurrences(of: "://", with: "://sdk-integration-unknown-key@")
+                    + "/api/v1/events/0000000000000000",
+                autoFlushInterval: 3600)
+            try await LuxAnalytics.initialize(with: config)
+            defer { Task { await LuxAnalyticsTestHelper.reset() } }
+
+            try await LuxAnalytics.shared.track("refused", metadata: ["suite": "DevServerEndToEndRejectionTests"])
+            await LuxAnalytics.flush()
+
+            // A refusal is not retryable: the event is dropped, not requeued.
+            #expect(await LuxAnalyticsQueue.shared.queueSize == 0)
+            let metrics = try #require(await LuxAnalytics.getMetrics())
+            #expect(metrics.networkStats.totalEventsSent == 0)
+            #expect(metrics.networkStats.totalEventsFailed == 1)
+            #expect(metrics.networkStats.totalBatchesFailed == 1)
+            #expect(metrics.networkStats.averagePayloadSize > 0)
+            #expect(metrics.performanceStats.averageFlushDuration > 0)
+            // Refusals don't trip the breaker: it's a client error, not an outage.
+            #expect(await !GlobalCircuitBreaker.shared.isOpen(for: config.apiURL))
         }
     }
 }

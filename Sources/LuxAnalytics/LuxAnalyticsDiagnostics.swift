@@ -78,11 +78,6 @@ public actor LuxAnalyticsDiagnostics {
         totalBatchesSent += 1
     }
 
-    func recordBytesTransmitted(bytes: Int) {
-        // Track bytes sent for bandwidth monitoring
-        recordPayloadSize(bytes, compressedSize: bytes)
-    }
-
     func recordBatchFailed() {
         totalBatchesFailed += 1
     }
