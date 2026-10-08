@@ -152,3 +152,31 @@ extension GlobalStateTests {
         }
     }
 }
+
+/// The queue's shared coders must agree on the date format (JSONEncoder's default), or a queue
+/// saved before a relaunch can't be read back.
+@Suite
+struct QueueCoderFormatTests {
+    private func savedEvent() -> QueuedEvent {
+        var queued = QueuedEvent(event: smallEvent("persisted"))
+        queued.recordFailedAttempt(at: Date(timeIntervalSince1970: 1_800_000_000))
+        return queued
+    }
+
+    @Test func aQueueSavedWithAPlainEncoderDecodes() throws {
+        let saved = try JSONEncoder().encode([savedEvent()])
+        let decoded = try #require(JSONCoders.decode([QueuedEvent].self, from: saved))
+        #expect(decoded.first?.lastAttemptAt == Date(timeIntervalSince1970: 1_800_000_000))
+        #expect(decoded.first?.notBefore != nil)
+    }
+
+    @Test func whatTheSharedEncoderWritesAPlainDecoderReads() throws {
+        let written = try #require(JSONCoders.encode([savedEvent()]))
+        let decoded = try JSONDecoder().decode([QueuedEvent].self, from: written)
+        #expect(decoded.first?.lastAttemptAt == Date(timeIntervalSince1970: 1_800_000_000))
+    }
+
+    @Test func garbageDecodesToNilRatherThanThrowing() {
+        #expect(JSONCoders.decode([QueuedEvent].self, from: Data("not json".utf8)) == nil)
+    }
+}

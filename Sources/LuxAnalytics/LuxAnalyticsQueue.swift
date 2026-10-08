@@ -152,12 +152,12 @@ actor LuxAnalyticsQueue {
     private func loadQueue() -> (events: [QueuedEvent], fromLegacyStore: Bool) {
         if let encryptedData = userDefaults.data(forKey: queueKey),
             let decrypted = QueueEncryption.decrypt(encryptedData),
-            let events = try? JSONDecoder().decode([QueuedEvent].self, from: decrypted)
+            let events = JSONCoders.decode([QueuedEvent].self, from: decrypted)
         {
             return (events, false)
         }
         if let data = userDefaults.data(forKey: Self.legacyKey),
-            let events = try? JSONDecoder().decode([QueuedEvent].self, from: data)
+            let events = JSONCoders.decode([QueuedEvent].self, from: data)
         {
             return (events, true)
         }
@@ -168,7 +168,7 @@ actor LuxAnalyticsQueue {
     @discardableResult
     private func saveQueue() -> Bool {
         do {
-            let data = try JSONEncoder().encode(events)
+            let data = try JSONCoders.encoder.encode(events)
             guard let encrypted = QueueEncryption.encrypt(data) else { return false }
             userDefaults.set(encrypted, forKey: queueKey)
             return true
@@ -190,7 +190,7 @@ actor LuxAnalyticsQueue {
 
         // Calculate total size
         let totalSizeBytes = queued.reduce(0) { total, event in
-            total + ((try? JSONEncoder().encode(event).count) ?? 0)
+            total + (JSONCoders.encode(event)?.count ?? 0)
         }
 
         return QueueStats(
