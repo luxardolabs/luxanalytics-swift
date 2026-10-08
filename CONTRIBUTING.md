@@ -2,33 +2,24 @@
 
 Thank you for your interest in contributing to LuxAnalytics! 
 
-## Development Setup
+## Development setup
 
-### Requirements
-- macOS 14.0+
-- Xcode 16.0+
-- Swift 6.0 with strict concurrency enabled
-- iOS 18.0+ deployment target
-- **Zero compilation warnings** standard
+You need macOS with Xcode 16 or later (Swift 6), and the iOS Simulator.
 
-### Getting Started
+```bash
+git clone https://github.com/YOUR_USERNAME/luxanalytics-swift.git
+cd luxanalytics-swift
+open Package.swift
+```
 
-1. Fork the repository
-2. Clone your fork:
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/luxanalytics-swift.git
-   cd luxanalytics-swift
-   ```
+Build, test and check with `make` (see [docs/MAINTAINING.md](docs/MAINTAINING.md)):
 
-3. Open in Xcode:
-   ```bash
-   open Package.swift
-   ```
+```bash
+make test        # the test suite on the iOS Simulator
+make docs-check  # every Swift example in the docs compiles
+```
 
-4. Build for iOS:
-   ```bash
-   xcodebuild -scheme LuxAnalytics -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 16' build
-   ```
+`make ios-check` (the full gate) also needs a luxios checkout and the settings in `Makefile.local`; maintainers run it before merging.
 
 ## Code Style
 
@@ -36,7 +27,7 @@ Thank you for your interest in contributing to LuxAnalytics!
 - Use `async/await` for all asynchronous code
 - No force unwrapping (`!`) except in tests
 - Use `actor` for shared mutable state
-- Document all public APIs
+- Document all public APIs, and update `docs/` when behaviour changes
 
 ## Pull Request Process
 
@@ -63,10 +54,7 @@ Thank you for your interest in contributing to LuxAnalytics!
 
 ## Testing
 
-Run tests before submitting:
-```bash
-xcodebuild test -scheme LuxAnalytics -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 16'
-```
+Add tests with your change, and run `make test` before opening a pull request. If you change the docs, run `make docs-check`: every Swift example must compile against the SDK.
 
 ## What We're Looking For
 
@@ -89,4 +77,4 @@ Open an issue for discussion before making large changes.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the MIT License (see [LICENSE](../LICENSE)).
+By contributing, you agree that your contributions will be licensed under the MIT License (see [LICENSE](LICENSE)).

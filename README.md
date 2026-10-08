@@ -1,31 +1,31 @@
 # LuxAnalytics
 
-A **privacy-first**, **high-performance** analytics SDK for iOS 18+ built with Swift 6. Zero compilation warnings with full strict concurrency compliance.
+A privacy-conscious analytics SDK for iOS 18+, written in Swift 6 with strict concurrency. It queues events on the device, sends them in batches to a self-hosted [LuxAnalytics server](https://github.com/luxardolabs/luxanalytics), and keeps working offline.
 
-## ✨ Key Features
+- **Batched and offline-first**: events are queued, encrypted at rest (AES-GCM, key in the Keychain), and sent in batches when the network is available
+- **Reliable delivery**: retries with exponential backoff, honours the server's `Retry-After`, and a circuit breaker stops hammering a server that's down
+- **Idempotent**: every event carries an id, so a retried batch isn't stored twice
+- **Compact**: batches over 1 KB are zlib-compressed
+- **Privacy tools**: opt-in PII redaction for event metadata, redacted debug logs, a resettable device ID, and a bundled privacy manifest
+- **One-line setup** from a DSN string
 
-- 🔒 **Privacy-First** - Automatic PII filtering, encrypted storage
-- ⚡ **100% Async/Await** - Modern Swift concurrency throughout  
-- 🎯 **Swift 6 Compliant** - Full actor isolation and data race safety
-- 📦 **Smart Batching** - Automatic event batching with offline support
-- 🔐 **Simple Setup** - Single DSN configuration string
-- 🛡️ **Production Ready** - Circuit breaker, retry logic, comprehensive error handling
+## Installation
 
-## 🚀 Quick Start
+Add the package in Xcode (**File → Add Package Dependencies…**, URL `https://github.com/luxardolabs/luxanalytics-swift`), or in `Package.swift`:
 
-### Installation
-
-```swift
+```swift ignore
 dependencies: [
     .package(url: "https://github.com/luxardolabs/luxanalytics-swift", from: "1.1.0")
 ]
 ```
 
-### Setup
+Releases on this repository start at **1.1.0**. The product and module are named `LuxAnalytics`.
+
+## Quick start
+
+Initialize once at launch with your project's DSN, then track events from anywhere:
 
 ```swift
-import LuxAnalytics
-
 @main
 struct MyApp: App {
     init() {
@@ -35,65 +35,52 @@ struct MyApp: App {
             )
         }
     }
-    
+
     var body: some Scene {
         WindowGroup { ContentView() }
     }
 }
+
+struct ContentView: View {
+    var body: some View {
+        Button("Sign up") {
+            Task {
+                try await LuxAnalytics.shared.track("signup_tapped", metadata: ["source": "home"])
+            }
+        }
+    }
+}
 ```
 
-### Track Events
+Metadata is `[String: String]`: convert numbers and booleans to strings. See the [Guide](docs/GUIDE.md) for users and sessions, when events are sent, and opting out.
 
-```swift
-let analytics = await LuxAnalytics.shared
+## Documentation
 
-// Track events
-try await analytics.track("user_signup", metadata: [
-    "method": "email",
-    "source": "app"
-])
+| | |
+|---|---|
+| [Guide](docs/GUIDE.md) | Setup, tracking, users and sessions, delivery, opt-out, observing events |
+| [Configuration](docs/CONFIGURATION.md) | The DSN, every option and its default, Info.plist keys |
+| [Privacy](docs/PRIVACY.md) | What's collected, the device ID, PII redaction, encryption, the privacy manifest, pinning your server |
+| [Reference](docs/REFERENCE.md) | The public API |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | Events not arriving, crashes at startup, background flushing |
+| [Maintaining](docs/MAINTAINING.md) | Building, testing and releasing the SDK |
 
-// Set user context
-await analytics.setUser("user-123")
-await analytics.setSession("session-456")
-```
+Every Swift example in these docs is compiled against the SDK by `make docs-check`.
 
-Releases on this repository start at **1.1.0**. The product and module are still `LuxAnalytics`, so `import LuxAnalytics` is unchanged.
+## Server
 
-## 🖥️ Server
+LuxAnalytics needs a backend to receive events: **[luxardolabs/luxanalytics](https://github.com/luxardolabs/luxanalytics)** (AGPL-3.0), which you host yourself. The wire format the SDK sends is specified once, in the server repository: **[Event format](https://github.com/luxardolabs/luxanalytics#event-formats)**.
 
-LuxAnalytics needs a backend to receive events. The server is a separate, self-hostable project: **[luxardolabs/luxanalytics](https://github.com/luxardolabs/luxanalytics)** (AGPL-3.0).
+## Requirements
 
-The wire format the SDK sends is specified once, in the server repository: **[Event format](https://github.com/luxardolabs/luxanalytics#event-formats)**.
+- iOS 18.0+
+- Swift 6 (swift-tools-version 6.0), Xcode 16+
 
-## 📋 Requirements
+## Contributing
 
-- **iOS 18.0+** 
-- **Swift 6.0+**
-- **Xcode 16.0+**
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report bugs on [GitHub Issues](https://github.com/luxardolabs/luxanalytics-swift/issues).
 
-## 📚 Documentation
-
-| Topic | Description |
-|-------|-------------|
-| [📖 **Complete Guide**](docs/wiki/) | Comprehensive documentation and tutorials |
-| [⚡ **Quick Start**](docs/wiki/Quick-Start.md) | Get running in under 5 minutes |
-| [🔧 **Configuration**](docs/wiki/Configuration.md) | Detailed setup and customization options |
-| [🔒 **Privacy & Security**](docs/wiki/Privacy-Security.md) | Privacy-first architecture and data protection |
-| [🚀 **API Reference**](docs/wiki/API-Reference.md) | Complete API documentation |
-| [🐛 **Troubleshooting**](docs/wiki/Troubleshooting.md) | Common issues and solutions |
-
-## 🤝 Contributing
-
-We welcome contributions! See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidelines.
-
-## 📞 Support
-
-- 🐛 [GitHub Issues](https://github.com/luxardolabs/luxanalytics-swift/issues)
-- 💬 [GitHub Discussions](https://github.com/luxardolabs/luxanalytics-swift/discussions)
-- 📧 support@luxardolabs.com
-
-## 📄 License
+## License
 
 The SDK is released under the [MIT License](LICENSE). Copyright (c) 2025-2026 Luxardo Labs.
 

@@ -10,11 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 First release of the `luxanalytics-swift` repository, which starts a new single-commit history. The 1.0.x versions belonged to the old history and are not reused. The Swift package, product, and module are still named `LuxAnalytics`.
 
 ### Added
-- `LuxAnalytics.resetDeviceID()` replaces the device ID with a new random one. The ID lives in the Keychain and otherwise survives reinstalls; this lifecycle is now documented in [Privacy & Security](wiki/Privacy-Security.md#device-identifier)
+- `LuxAnalytics.resetDeviceID()` replaces the device ID with a new random one. The ID lives in the Keychain and otherwise survives reinstalls; this lifecycle is now documented in [Privacy & Security](docs/PRIVACY.md#the-device-id)
+
+### Documentation
+- **The docs were rewritten from the code.** The old `docs/wiki/` (22 pages, ~17,000 lines, written in one day in July 2025) documented dozens of APIs the SDK never had, such as `getPerformanceMetrics()`, error cases like `queueFull`, and metrics like `cpuUsagePercentage`. Of its 269 Swift examples, 67 compiled. It is replaced by `docs/GUIDE.md`, `CONFIGURATION.md`, `PRIVACY.md`, `REFERENCE.md`, `TROUBLESHOOTING.md` and `MAINTAINING.md`, with `CHANGELOG.md` and `CONTRIBUTING.md` moved to the root
+- `make docs-check`, part of `make ios-check`, compiles every Swift example in the docs against the SDK, checks every API listing against the compiler-emitted public interface, and checks every relative link and anchor
 
 ### Removed
 - `LuxAnalyticsEvents.notifyEventDropped(_:reason:)` and `notifyEventExpired(_:)`. The first ignored its `reason`; both were internal helpers
-- **Certificate pinning** (`CertificatePinningConfig` and the `certificatePinning:` configuration parameter). It hashed the whole certificate, so every certificate renewal broke the pin, and the only fix was an app update. Apps that want pinning should use App Transport Security's `NSPinnedDomains`: it pins public keys, supports backup and CA pins, and is verified to cover the SDK's requests. See [Pinning Your Own Server](wiki/Privacy-Security.md#pinning-your-own-server)
+- **Certificate pinning** (`CertificatePinningConfig` and the `certificatePinning:` configuration parameter). It hashed the whole certificate, so every certificate renewal broke the pin, and the only fix was an app update. Apps that want pinning should use App Transport Security's `NSPinnedDomains`: it pins public keys, supports backup and CA pins, and is verified to cover the SDK's requests. See [Pinning Your Own Server](docs/PRIVACY.md#pinning-your-own-server)
 - `AnalyticsConfig`: unused public API left over from HMAC authentication. It read `LUX_API_URL`, `LUX_HMAC_SECRET` and `LUX_KEY_ID` from the app's Info.plist and crashed (`fatalError`) when one was missing. Nothing in the SDK or its known adopters used it, and an app bundle can't keep a shared secret. The SDK authenticates with the DSN's public id
 
 ### Changed
@@ -160,4 +164,4 @@ LuxAnalytics v1.0.0 is the first public release of our privacy-first analytics S
 - No synchronous API alternatives
 
 ### Migration Notes
-This is the initial public release. For migrating from other analytics SDKs or pre-release versions, see our [Migration Guide](MIGRATION.md).
+This is the initial public release.

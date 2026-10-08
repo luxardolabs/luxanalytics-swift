@@ -24,7 +24,7 @@ LUXIOS         ?= ../luxios
 APP_SRC   := Sources/LuxAnalytics:Tests/LuxAnalyticsTests
 NET_LAYER := NetworkTransport.swift
 
-.PHONY: help ios-check ios-format test integration luxios-pin contract-url
+.PHONY: help ios-check ios-format test integration docs-check luxios-pin contract-url
 
 help: ## Show this help message
 	@echo "LuxAnalytics v$(VERSION)"
@@ -38,7 +38,7 @@ luxios-pin: ## Verify the luxios checkout matches LUXIOS_VERSION
 contract-url:
 	@[ -n "$(LUXANALYTICS_OPENAPI_URL)" ] || { echo "LUXANALYTICS_OPENAPI_URL is not set: the contract stage needs the server's /openapi.json (copy Makefile.local.example to Makefile.local)"; exit 1; }
 
-ios-check: luxios-pin contract-url ## The iOS gate (luxios $(LUXIOS_VERSION)): lint + format + arch + build + contract + decode
+ios-check: luxios-pin contract-url docs-check ## The gate: docs-check, then luxios $(LUXIOS_VERSION) (lint + format + arch + build + contract + decode)
 	@APP_SRC="$(APP_SRC)" \
 	 NET_LAYER="$(NET_LAYER)" \
 	 VIEW_DIRS="Views" \
@@ -46,6 +46,9 @@ ios-check: luxios-pin contract-url ## The iOS gate (luxios $(LUXIOS_VERSION)): l
 	 CONTRACT_FACTS="scripts/contract_facts.py" \
 	 LUXANALYTICS_OPENAPI_URL="$(LUXANALYTICS_OPENAPI_URL)" \
 	 bash "$(LUXIOS)/scripts/ios-check.sh"
+
+docs-check: ## Compile every Swift example in README.md and docs/ against the SDK
+	@python3 -I scripts/docs-check.py
 
 ios-format: luxios-pin ## Rewrite sources to the canonical luxios style
 	@APP_SRC="$(APP_SRC)" MODE=fix bash "$(LUXIOS)/scripts/format-check.sh"
