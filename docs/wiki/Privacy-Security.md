@@ -371,8 +371,15 @@ Task {
     for await event in LuxAnalyticsEvents.eventStream {
         switch event {
         case .eventsFailed(_, let error):
-            if error.localizedDescription.contains("certificate") {
-                print("🔒 Certificate validation failed")
+            switch error {
+            case .serverError(let status, _) where status == 401 || status == 403:
+                print("🔒 Server refused the DSN credentials (HTTP \(status))")
+            case .networkError(let underlying as URLError)
+            where [.secureConnectionFailed, .serverCertificateUntrusted, .serverCertificateHasBadDate]
+                .contains(underlying.code):
+                print("🔒 TLS failure: \(underlying.code)")
+            default:
+                break
             }
         case .eventsDropped(let count, let reason):
             print("🔒 Dropped \(count) events: \(reason)")
@@ -386,11 +393,13 @@ Task {
 
 ### Security Metrics
 
+There are no security-specific counters; failures show up in the network stats and the circuit breaker:
+
 ```swift
 let diagnostics = await LuxAnalytics.getDiagnostics()
-print("Encryption failures: \(diagnostics.securityStats.encryptionFailures)")
-print("Authentication failures: \(diagnostics.networkStats.authenticationFailures)")
-print("Certificate validation failures: \(diagnostics.securityStats.certificateFailures)")
+print("Events failed: \(diagnostics.networkStats.totalEventsFailed)")
+print("Last failed send: \(String(describing: diagnostics.networkStats.lastFailedSend))")
+print("Circuit breaker: \(diagnostics.circuitBreakerStatus?.state ?? "unknown")")
 ```
 
 ## Incident Response
@@ -410,12 +419,12 @@ If you suspect a security issue:
 
 2. **Assessment**:
    - Review logs for suspicious activity
-   - Check certificate validation failures
+   - Check for TLS failures and 401/403 responses (see Debug Security Events)
    - Verify DSN credential integrity
 
 3. **Recovery**:
    - Rotate DSN credentials
-   - Update certificate pins if needed
+   - If your app pins with `NSPinnedDomains`, ship the new pins in an app update
    - Review and update security configuration
 
 4. **Prevention**:
