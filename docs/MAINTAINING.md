@@ -32,11 +32,11 @@ Settings that name private hosts live in an untracked `Makefile.local`. Copy `Ma
 
 | Setting | Used by | Value |
 |---|---|---|
-| `LUXANALYTICS_OPENAPI_URL` | `make ios-check` (contract stage) | The dev server's `/openapi.json` |
+| `export OPENAPI_URL` | `make ios-check` (contract stage) | The dev server's `/openapi.json` (luxios reads it over `contract_facts.py`'s empty value) |
 | `LUXANALYTICS_DEV_URL` | `make integration` | The dev server's base URL |
 | `LUXANALYTICS_DEV_DSN` | `make integration` | The DSN of the dev `sdk-integration` app |
 
-Each target refuses to run without its settings rather than skip the check.
+Without them the contract stage, `make integration` and the dev-server tests fail; nothing is silently skipped.
 
 ## The luxios gate
 

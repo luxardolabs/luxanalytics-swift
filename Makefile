@@ -7,24 +7,23 @@ VERSION := $(shell cat VERSION)
 # iOS conformance standard (luxios), the iOS sibling of luxarch/luxlint/luxaudit.
 # The pin is a committed fact, so it uses `:=` and can't be shadowed by a Makefile.local.
 # The checkout PATH is per-site topology and stays overridable with `?=`.
-LUXIOS_VERSION := 0.7.3
+LUXIOS_VERSION := 0.9.0
 LUXIOS         ?= ../luxios
 
 # The facts handed to the gate (no `#` comments inside the recipe: a `#` line ends make's
 # logical line and silently unsets every fact above it):
 #   APP_SRC    the library target, its tests, and the host-check app
 #   NET_LAYER  the one file allowed to touch URLSession
-#   VIEW_DIRS  none: a library has no views, so the name matches no directory and §2's
-#              view check finds nothing to scan. DESIGN_SYS is unset for the same reason
-#              and §9 reports itself skipped.
+#   VIEW_DIRS  none: a library has no view layer (luxios 0.8.0 declared skip; §2's view
+#              check and §9 print a skip line). DESIGN_SYS is unset for the same reason.
 #   BUILD_CMD  xcodebuild for the iOS Simulator (the package is iOS-only)
-#   CONTRACT_FACTS  the SDK's request bodies vs the server's /openapi.json. The spec URL
-#              comes from LUXANALYTICS_OPENAPI_URL (Makefile.local); the gate refuses to run
-#              without it rather than skip the stage.
+#   CONTRACT_FACTS  the SDK's request bodies vs the server's /openapi.json. The spec URL is
+#              the dev server's (a private host), so it isn't committed: `export OPENAPI_URL = …`
+#              in Makefile.local. Without it luxios fails the contract stage.
 APP_SRC   := Sources/LuxAnalytics:Tests/LuxAnalyticsTests:Tests/HostApp
 NET_LAYER := NetworkTransport.swift
 
-.PHONY: help ios-check ios-format test integration host-check docs-check luxios-pin contract-url
+.PHONY: help ios-check ios-format test integration host-check docs-check luxios-pin
 
 help: ## Show this help message
 	@echo "LuxAnalytics v$(VERSION)"
@@ -35,16 +34,12 @@ luxios-pin: ## Verify the luxios checkout matches LUXIOS_VERSION
 	@test -f "$(LUXIOS)/scripts/ios-check.sh" || { echo "luxios not found at $(LUXIOS) (set LUXIOS=<path to a luxios checkout>)"; exit 1; }
 	@have=$$(cat "$(LUXIOS)/VERSION"); [ "$$have" = "$(LUXIOS_VERSION)" ] || { echo "luxios at $(LUXIOS) is $$have, but this repo pins $(LUXIOS_VERSION) (check out v$(LUXIOS_VERSION) there)"; exit 1; }
 
-contract-url:
-	@[ -n "$(LUXANALYTICS_OPENAPI_URL)" ] || { echo "LUXANALYTICS_OPENAPI_URL is not set: the contract stage needs the server's /openapi.json (copy Makefile.local.example to Makefile.local)"; exit 1; }
-
-ios-check: luxios-pin contract-url docs-check ## The gate: docs-check, then luxios $(LUXIOS_VERSION) (lint + format + arch + build + contract + decode)
+ios-check: luxios-pin docs-check ## The gate: docs-check, then luxios $(LUXIOS_VERSION) (wiring + lint + format + arch + build + contract + decode)
 	@APP_SRC="$(APP_SRC)" \
 	 NET_LAYER="$(NET_LAYER)" \
-	 VIEW_DIRS="Views" \
+	 VIEW_DIRS="none" \
 	 BUILD_CMD="bash scripts/build.sh build" \
 	 CONTRACT_FACTS="scripts/contract_facts.py" \
-	 LUXANALYTICS_OPENAPI_URL="$(LUXANALYTICS_OPENAPI_URL)" \
 	 bash "$(LUXIOS)/scripts/ios-check.sh"
 
 host-check: ## Checks that need a real app on the Simulator: Keychain, relaunch, reinstall, lifecycle

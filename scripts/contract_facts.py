@@ -4,14 +4,12 @@ The SDK only SENDS to the server (it reads nothing back but the status code and
 Retry-After), so every component here is a REQUEST body. Editing this file IS a
 wire-format change, made visible.
 
-The spec URL is not committed: the dev server's hostname is private. Set
-LUXANALYTICS_OPENAPI_URL (e.g. in an untracked Makefile.local) to the server's
-/openapi.json. `make ios-check` refuses to run the contract stage without it.
+The spec URL is not committed: the dev server's hostname is private. luxios reads
+OPENAPI_URL from the environment over this file's (`export OPENAPI_URL = …` in the
+untracked Makefile.local); with neither, the contract stage fails.
 """
 
-import os
-
-OPENAPI_URL = os.environ.get("LUXANALYTICS_OPENAPI_URL", "")
+OPENAPI_URL = ""
 
 # The SDK encodes timestamps as ISO 8601 strings and metadata as a string map.
 TYPEMAP = {

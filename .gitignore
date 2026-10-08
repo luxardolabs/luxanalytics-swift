@@ -74,7 +74,6 @@ fastlane/test_output
 .LSOverride
 
 # Development
-CLAUDE.md
 
 # Icon must end with two \r
 Icon
@@ -99,3 +98,13 @@ Temporary Items
 .apdisk
 # Per-site make settings (private hostnames)
 Makefile.local
+
+# Claude Code hook session state (luxarch --emit hooks)
+.claude/.hooks-heartbeat
+.claude/.luxpm-ledger.json
+.claude/.luxpm-searched.json
+.claude/settings.json.bak
+.claude/.push-hold
+
+# Python bytecode (the Claude hooks generate it when they run)
+__pycache__/
