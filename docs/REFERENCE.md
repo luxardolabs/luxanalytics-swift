@@ -136,6 +136,7 @@ public enum AnalyticsEventNotification : Sendable {
   case eventsFailed([AnalyticsEvent], error: LuxAnalyticsError)
   case eventsDropped(count: Int, reason: QueueOverflowStrategy)
   case eventsExpired([AnalyticsEvent])
+  case eventsAbandoned([AnalyticsEvent], lastError: LuxAnalyticsError)
 }
 ```
 

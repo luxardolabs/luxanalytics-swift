@@ -29,6 +29,9 @@ public enum AnalyticsEventNotification: Sendable {
     case eventsFailed([AnalyticsEvent], error: LuxAnalyticsError)
     case eventsDropped(count: Int, reason: QueueOverflowStrategy)
     case eventsExpired([AnalyticsEvent])
+    /// Events that failed `maxRetryAttempts` retries and were given up on, with the
+    /// error from the last attempt.
+    case eventsAbandoned([AnalyticsEvent], lastError: LuxAnalyticsError)
 }
 
 /// Internal event manager
@@ -134,5 +137,9 @@ extension LuxAnalytics {
 
     static func notifyEventsExpired(_ events: [AnalyticsEvent]) async {
         EventManager.shared.notify(.eventsExpired(events))
+    }
+
+    static func notifyEventsAbandoned(_ events: [AnalyticsEvent], lastError: LuxAnalyticsError) async {
+        EventManager.shared.notify(.eventsAbandoned(events, lastError: lastError))
     }
 }

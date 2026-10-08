@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 First release of the `luxanalytics-swift` repository, which starts a new single-commit history. The 1.0.x versions belonged to the old history and are not reused. The Swift package, product, and module are still named `LuxAnalytics`.
 
 ### Added
+- `AnalyticsEventNotification.eventsAbandoned(_:lastError:)`: events dropped after running out of retries, with the last attempt's error. They used to be reported as `eventsDropped(count: 1, reason: .dropOldest)`, indistinguishable from queue overflow. Adding a case is source-breaking for an exhaustive `switch` over the notifications, so it lands before 1.1.0
 - `LuxAnalytics.resetDeviceID()` replaces the device ID with a new random one. The ID lives in the Keychain and otherwise survives reinstalls; this lifecycle is now documented in [Privacy & Security](docs/PRIVACY.md#the-device-id)
 
 ### Documentation

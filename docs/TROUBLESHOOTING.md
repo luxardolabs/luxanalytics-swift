@@ -30,7 +30,7 @@ func diagnoseDelivery() async {
 - **`enabled: false`**: the user opted out; `track` throws `analyticsDisabled`.
 - **Events queued, nothing sent**: flushes happen every `autoFlushInterval` (30 s by default). Call `LuxAnalytics.flush()` to send now.
 - **Circuit breaker open**: five consecutive failures stop sending for 60 seconds. `LuxAnalytics.resetCircuitBreaker()` closes it.
-- **Events disappear without arriving**: watch `LuxAnalyticsEvents.eventStream` for `eventsFailed`. A `serverError` with a 4xx status means the server refused the batch, and those events are dropped:
+- **Events disappear without arriving**: watch `LuxAnalyticsEvents.eventStream` for `eventsFailed`, and for `eventsAbandoned` (events given up on after `maxRetryAttempts` retries). A `serverError` with a 4xx status means the server refused the batch, and those events are dropped:
   - **401 or 403**: the DSN's public id isn't accepted. Check the DSN against your server's dashboard.
   - **404**: the project id doesn't exist on that server.
   - **422**: an event failed validation, for example an empty name.

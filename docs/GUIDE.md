@@ -166,7 +166,7 @@ A flush is skipped, and events stay queued, when:
 | 408, 5xx, or a network error | Kept and retried, and counts against the circuit breaker. |
 | Any other 4xx (400, 401, 404, 422, …) | Dropped: retrying would fail the same way. |
 
-A retried event waits 2ⁿ seconds after its n-th failure (±25% jitter, at most 5 minutes) before it is sent again. It is retried up to `maxRetryAttempts` times (default 5, so six attempts in all), then dropped. A `Retry-After` header (seconds or an HTTP date, capped at one hour) holds every flush to that server until it passes.
+A retried event waits 2ⁿ seconds after its n-th failure (±25% jitter, at most 5 minutes) before it is sent again. It is retried up to `maxRetryAttempts` times (default 5, so six attempts in all), then dropped and reported as `eventsAbandoned`. A `Retry-After` header (seconds or an HTTP date, capped at one hour) holds every flush to that server until it passes.
 
 ### Queue limits
 
@@ -227,6 +227,8 @@ func observeAnalytics() async {
             print("dropped \(count) (\(reason))")
         case .eventsExpired(let events):
             print("expired \(events.count)")
+        case .eventsAbandoned(let events, let lastError):
+            print("gave up on \(events.count): \(lastError.localizedDescription)")
         }
     }
 }
@@ -234,7 +236,8 @@ func observeAnalytics() async {
 
 - `eventsSent` and `eventsFailed` arrive once per event, not once per batch.
 - `eventsFailed` is reported for every failed attempt, including ones that will be retried.
-- `eventsDropped` reports queue overflow with the strategy that applied. An event that runs out of retries is also reported as `eventsDropped(count: 1, reason: .dropOldest)`.
+- `eventsDropped` reports queue overflow, with the strategy that applied.
+- `eventsAbandoned` reports events dropped after running out of retries, with the error from the last attempt.
 
 ## Diagnostics
 

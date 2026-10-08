@@ -334,14 +334,18 @@ extension LuxAnalytics {
         for queuedEvent in events {
             await LuxAnalytics.notifyEventsFailed([queuedEvent.event], error: error)
         }
+        var abandoned: [AnalyticsEvent] = []
         for queuedEvent in events {
             guard queuedEvent.shouldRetry(maxRetries: config.maxRetryAttempts) else {
-                await LuxAnalytics.notifyEventsDropped(count: 1, reason: .dropOldest)
+                abandoned.append(queuedEvent.event)
                 continue
             }
             var retry = queuedEvent
             retry.recordFailedAttempt()
             await LuxAnalyticsQueue.shared.enqueue(retry)
+        }
+        if !abandoned.isEmpty {
+            await LuxAnalytics.notifyEventsAbandoned(abandoned, lastError: error)
         }
         await LuxAnalyticsDiagnostics.shared.recordEventsFailed(count: events.count, error: cause)
         await LuxAnalyticsDiagnostics.shared.recordBatchFailed()
