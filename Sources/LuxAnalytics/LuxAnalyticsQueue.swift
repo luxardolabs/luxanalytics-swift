@@ -49,6 +49,7 @@ actor LuxAnalyticsQueue {
 
     /// Apply the configuration's queue limits, and drop anything already past its TTL.
     func configure(maxSizeHard: Int, overflowStrategy: QueueOverflowStrategy, eventTTL: TimeInterval) {
+        batchSizeCap = Int.max
         self.maxSizeHard = max(1, maxSizeHard)
         self.overflowStrategy = overflowStrategy
         self.eventTTL = eventTTL
@@ -193,6 +194,20 @@ actor LuxAnalyticsQueue {
             newestEventAge: newestEventAge,
             retryingEvents: queued.filter { $0.retryCount > 0 }.count
         )
+    }
+
+    /// The most events one flush may take, lowered after a 413 so batches fit the server's
+    /// body size limit. Lasts until the SDK is configured again.
+    private(set) var batchSizeCap = Int.max
+
+    func capBatchSize(at limit: Int) {
+        batchSizeCap = max(1, min(batchSizeCap, limit))
+    }
+
+    /// Put events back at the head of the queue, unchanged: a batch that was split, not failed.
+    func returnToFront(_ returned: [QueuedEvent]) {
+        events.insert(contentsOf: returned, at: 0)
+        saveQueue()
     }
 
     func clear() {

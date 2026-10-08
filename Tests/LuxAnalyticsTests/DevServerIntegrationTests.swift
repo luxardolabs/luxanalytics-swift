@@ -114,6 +114,53 @@ extension GlobalStateTests {
         }
     }
 
+    /// The server's body limit is 10 MB, checked after decompression too. A 413 means split
+    /// the batch (the event format's "Responses"): two ~6 MB events must both arrive, one per
+    /// request; a single 11 MB event can never fit and is dropped.
+    @Suite(
+        .serialized,
+        .enabled(if: DevServer.dsn != nil, "LUXANALYTICS_DEV_DSN not set; see LUXANALYTI-73"))
+    struct DevServerOversizedBatchTests {
+        private func bigEvent(_ name: String, megabytes: Int) -> AnalyticsEvent {
+            AnalyticsEvent(
+                name: name, timestamp: ISO8601DateFormatter().string(from: Date()), userId: nil, sessionId: nil,
+                metadata: ["blob": String(repeating: "x", count: megabytes * 1_024 * 1_024)])
+        }
+
+        @Test func a413SplitsTheBatchAndEveryEventArrives() async throws {
+            await LuxAnalyticsTestHelper.reset()
+            let config = try LuxAnalyticsConfiguration(dsn: try #require(DevServer.dsn), autoFlushInterval: 3_600)
+            try await LuxAnalytics.initialize(with: config)
+            defer { Task { await LuxAnalyticsTestHelper.reset() } }
+            await LuxAnalyticsQueue.shared.enqueue(bigEvent("oversized-1", megabytes: 6))
+            await LuxAnalyticsQueue.shared.enqueue(bigEvent("oversized-2", megabytes: 6))
+
+            await LuxAnalytics.flush()  // 12 MB: 413, split
+            #expect(await LuxAnalyticsQueue.shared.queueSize == 2, "split batches go back on the queue")
+            #expect(await LuxAnalyticsQueue.shared.batchSizeCap == 1)
+            await LuxAnalytics.flush()  // 6 MB
+            await LuxAnalytics.flush()  // 6 MB
+            #expect(await LuxAnalyticsQueue.shared.queueSize == 0)
+            let metrics = try #require(await LuxAnalytics.getMetrics())
+            #expect(metrics.networkStats.totalEventsSent == 2)
+            #expect(metrics.networkStats.totalEventsFailed == 0)
+        }
+
+        @Test func aSingleEventOverTheLimitIsDropped() async throws {
+            await LuxAnalyticsTestHelper.reset()
+            let config = try LuxAnalyticsConfiguration(dsn: try #require(DevServer.dsn), autoFlushInterval: 3_600)
+            try await LuxAnalytics.initialize(with: config)
+            defer { Task { await LuxAnalyticsTestHelper.reset() } }
+            await LuxAnalyticsQueue.shared.enqueue(bigEvent("too-big", megabytes: 11))
+
+            await LuxAnalytics.flush()
+            #expect(await LuxAnalyticsQueue.shared.queueSize == 0)
+            let metrics = try #require(await LuxAnalytics.getMetrics())
+            #expect(metrics.networkStats.totalEventsFailed == 1)
+            #expect(metrics.networkStats.totalEventsSent == 0)
+        }
+    }
+
     // Runs with only LUXANALYTICS_DEV_URL: the real server refuses unknown credentials,
     // which exercises the whole track -> flush -> drop path and its metrics today.
     @Suite(

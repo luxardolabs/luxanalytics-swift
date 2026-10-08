@@ -69,7 +69,7 @@ Every Swift example in these docs is compiled against the SDK by `make docs-chec
 
 ## Server
 
-LuxAnalytics needs a backend to receive events: **[luxardolabs/luxanalytics](https://github.com/luxardolabs/luxanalytics)** (AGPL-3.0), which you host yourself. The wire format the SDK sends is specified once, in the server repository: **[Event format](https://github.com/luxardolabs/luxanalytics#event-formats)**.
+LuxAnalytics needs a backend to receive events: **[luxardolabs/luxanalytics](https://github.com/luxardolabs/luxanalytics)** (AGPL-3.0), which you host yourself. The wire format, responses, and the event names and keys the dashboard reads are specified once, in the server repository: **[Event format](https://github.com/luxardolabs/luxanalytics/blob/main/docs/event-format.md)**.
 
 ## Requirements
 

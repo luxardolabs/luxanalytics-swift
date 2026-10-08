@@ -167,7 +167,8 @@ public final class LuxAnalytics: Sendable {
         }
 
         // The server accepts at most 1,000 events per request, whatever batchSize says.
-        let eventsToSend = await LuxAnalyticsQueue.shared.dequeue(limit: min(config.batchSize, Self.maxEventsPerRequest))
+        let limit = min(config.batchSize, Self.maxEventsPerRequest, await LuxAnalyticsQueue.shared.batchSizeCap)
+        let eventsToSend = await LuxAnalyticsQueue.shared.dequeue(limit: limit)
         guard !eventsToSend.isEmpty else {
             await instance.analyticsActor.debugLog("No events to flush")
             return
@@ -246,6 +247,21 @@ extension LuxAnalytics {
             switch Self.outcome(forStatus: statusCode) {
             case .sent:
                 await handleSent(events, config: config)
+            case .tooLarge where events.count > 1:
+                // 413: the body is over the server's size limit. The event format says to split
+                // the batch: put the events back where they were and send half as many at a time.
+                await analyticsActor.debugLog("Batch of \(events.count) too large (413); splitting")
+                await LuxAnalyticsQueue.shared.returnToFront(events)
+                await LuxAnalyticsQueue.shared.capBatchSize(at: events.count / 2)
+            case .tooLarge:
+                // A single event over the limit can never be sent.
+                let error = Self.serverError(statusCode: statusCode, body: body)
+                await analyticsActor.debugLog("Event too large to send (413): \(error)")
+                for queuedEvent in events {
+                    await LuxAnalytics.notifyEventsFailed([queuedEvent.event], error: error)
+                }
+                await LuxAnalyticsDiagnostics.shared.recordEventsFailed(count: events.count, error: error)
+                await LuxAnalyticsDiagnostics.shared.recordBatchFailed()
             case .rateLimited:
                 // The server is up and asked us to slow down: keep the events, and
                 // don't count it against the circuit breaker.
@@ -282,6 +298,8 @@ extension LuxAnalytics {
         case sent
         /// 429: rate limited. Requeue without tripping the circuit breaker.
         case rateLimited
+        /// 413: over the server's body size limit. Split the batch (or drop a single event).
+        case tooLarge
         /// 408 or any 5xx (and anything unrecognised): requeue, and count it against the breaker.
         case retry
         /// Any other 4xx: the request itself is wrong (400, 401, 404, 422), so retrying can't help.
@@ -292,6 +310,7 @@ extension LuxAnalytics {
         switch statusCode {
         case 200...299: .sent
         case 429: .rateLimited
+        case 413: .tooLarge
         case 408: .retry
         case 400...499: .drop
         default: .retry

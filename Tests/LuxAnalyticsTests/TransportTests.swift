@@ -117,7 +117,11 @@ struct SendOutcomeTests {
         #expect(LuxAnalytics.outcome(forStatus: status) == .retry)
     }
 
-    @Test(arguments: [400, 401, 403, 404, 413, 422])
+    @Test func anOversizedBodyIsSplit() {
+        #expect(LuxAnalytics.outcome(forStatus: 413) == .tooLarge)
+    }
+
+    @Test(arguments: [400, 401, 403, 404, 422])
     func badRequestsAreDropped(status: Int) {
         #expect(LuxAnalytics.outcome(forStatus: status) == .drop)
     }
