@@ -11,8 +11,8 @@ public struct QueueStats: Sendable, Codable {
 }
 
 /// Actor-based queue for thread-safe event management with retry logic
-public actor LuxAnalyticsQueue {
-    public static let shared = LuxAnalyticsQueue()
+actor LuxAnalyticsQueue {
+    static let shared = LuxAnalyticsQueue()
     private let queueKey = "com.luxardolabs.LuxAnalytics.eventQueue.v2"
     private let userDefaults: UserDefaults
 
@@ -55,16 +55,16 @@ public actor LuxAnalyticsQueue {
         cleanExpiredEvents()
     }
 
-    public var queueSize: Int {
+    var queueSize: Int {
         return events.count
     }
 
-    public func enqueue(_ event: AnalyticsEvent) {
+    func enqueue(_ event: AnalyticsEvent) {
         enqueue(QueuedEvent(event: event))
     }
 
     /// Append an event, applying the overflow strategy when the queue is at its hard limit.
-    public func enqueue(_ queuedEvent: QueuedEvent) {
+    func enqueue(_ queuedEvent: QueuedEvent) {
         guard makeRoom() else {
             notifyDropped(1, reason: .dropNewest)
             return
@@ -75,7 +75,7 @@ public actor LuxAnalyticsQueue {
 
     /// Dequeue up to `limit` events that are ready to send, in queue order.
     /// Events still inside their retry backoff stay queued.
-    public func dequeue(limit: Int) -> [QueuedEvent] {
+    func dequeue(limit: Int) -> [QueuedEvent] {
         dequeue(limit: limit, now: Date())
     }
 
@@ -173,7 +173,7 @@ public actor LuxAnalyticsQueue {
 
     // MARK: - Public API
 
-    public func getQueueStats() -> QueueStats {
+    func getQueueStats() -> QueueStats {
         let now = Date()
         let queued = events
         let oldestEvent = queued.first
@@ -195,7 +195,7 @@ public actor LuxAnalyticsQueue {
         )
     }
 
-    public func clear() {
+    func clear() {
         events.removeAll()
         saveQueue()
         SecureLogger.log("Queue cleared", category: .queue, level: .info)

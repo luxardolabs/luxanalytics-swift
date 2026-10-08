@@ -1,13 +1,13 @@
 import Foundation
 
 /// Modern async timer implementation for iOS 18+
-public enum AsyncTimer {
+enum AsyncTimer {
     /// Create a timer using Duration API
     /// - Parameters:
     ///   - duration: Time interval between fires
     ///   - tolerance: Timing tolerance to improve energy efficiency
     /// - Returns: An async stream of timer ticks
-    public static func schedule(
+    static func schedule(
         every duration: Duration,
         tolerance: Duration? = nil
     ) -> AsyncStream<Void> {

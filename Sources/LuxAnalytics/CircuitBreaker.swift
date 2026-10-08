@@ -8,7 +8,7 @@ public enum CircuitBreakerState: Sendable {
 }
 
 /// Circuit breaker for handling failing endpoints
-public actor CircuitBreaker {
+actor CircuitBreaker {
 
     // Configuration
     private let failureThreshold: Int
@@ -28,7 +28,7 @@ public actor CircuitBreaker {
     private var stateChanges: [(from: CircuitBreakerState, to: CircuitBreakerState, at: Date)] = []
 
     /// Initialize circuit breaker with configuration
-    public init(
+    init(
         failureThreshold: Int = 5,
         resetTimeout: TimeInterval = 60,
         halfOpenMaxAttempts: Int = 3
@@ -40,12 +40,12 @@ public actor CircuitBreaker {
     }
 
     /// Get current state
-    public var currentState: CircuitBreakerState {
+    var currentState: CircuitBreakerState {
         return state
     }
 
     /// Check if requests should be allowed
-    public func shouldAllowRequest() -> Bool {
+    func shouldAllowRequest() -> Bool {
         switch state {
         case .closed:
             return true
@@ -67,7 +67,7 @@ public actor CircuitBreaker {
     }
 
     /// Record a successful request
-    public func recordSuccess() {
+    func recordSuccess() {
         totalSuccesses += 1
 
         switch state {
@@ -92,7 +92,7 @@ public actor CircuitBreaker {
     }
 
     /// Record a failed request
-    public func recordFailure() {
+    func recordFailure() {
         totalFailures += 1
         lastFailureTime = Date()
 
@@ -115,7 +115,7 @@ public actor CircuitBreaker {
     }
 
     /// Force reset the circuit breaker
-    public func reset() {
+    func reset() {
         transitionTo(.closed)
         failureCount = 0
         halfOpenAttempts = 0
@@ -123,7 +123,7 @@ public actor CircuitBreaker {
     }
 
     /// Get circuit breaker metrics
-    public func getMetrics() -> CircuitBreakerMetrics {
+    func getMetrics() -> CircuitBreakerMetrics {
         return CircuitBreakerMetrics(
             currentState: state,
             failureCount: failureCount,

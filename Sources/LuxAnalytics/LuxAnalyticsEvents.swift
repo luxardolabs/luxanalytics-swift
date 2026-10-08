@@ -116,23 +116,23 @@ extension LuxAnalytics {
     ///     }
     /// }
     /// ```
-    public static func notifyEventQueued(_ event: AnalyticsEvent) async {
+    static func notifyEventQueued(_ event: AnalyticsEvent) async {
         EventManager.shared.notify(.eventQueued(event))
     }
 
-    public static func notifyEventsSent(_ events: [AnalyticsEvent]) async {
+    static func notifyEventsSent(_ events: [AnalyticsEvent]) async {
         EventManager.shared.notify(.eventsSent(events))
     }
 
-    public static func notifyEventsFailed(_ events: [AnalyticsEvent], error: LuxAnalyticsError) async {
+    static func notifyEventsFailed(_ events: [AnalyticsEvent], error: LuxAnalyticsError) async {
         EventManager.shared.notify(.eventsFailed(events, error: error))
     }
 
-    public static func notifyEventsDropped(count: Int, reason: QueueOverflowStrategy) async {
+    static func notifyEventsDropped(count: Int, reason: QueueOverflowStrategy) async {
         EventManager.shared.notify(.eventsDropped(count: count, reason: reason))
     }
 
-    public static func notifyEventsExpired(_ events: [AnalyticsEvent]) async {
+    static func notifyEventsExpired(_ events: [AnalyticsEvent]) async {
         EventManager.shared.notify(.eventsExpired(events))
     }
 }

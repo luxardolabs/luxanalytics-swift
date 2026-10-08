@@ -6,7 +6,7 @@ import Security
 import UIKit
 #endif
 
-public actor AppAnalyticsContext {
+actor AppAnalyticsContext {
     static let shared = AppAnalyticsContext()
 
     // Cached context - only changes on app restart
@@ -16,7 +16,7 @@ public actor AppAnalyticsContext {
     private init() {}
 
     /// Get current analytics context (cached)
-    public func current() async -> [String: String] {
+    func current() async -> [String: String] {
         if let cached = cachedContext {
             return cached
         }
@@ -28,7 +28,7 @@ public actor AppAnalyticsContext {
     }
 
     /// Force refresh the cached context (rarely needed)
-    public func refresh() async {
+    func refresh() async {
         cachedContext = await generateContext()
     }
 
@@ -191,7 +191,7 @@ public actor AppAnalyticsContext {
 extension UIDevice {
     /// Get device model code
     /// This is safe to call from any thread as it doesn't access UIKit
-    nonisolated public static func modelCode() -> String {
+    nonisolated static func modelCode() -> String {
         var systemInfo = utsname()
         uname(&systemInfo)
         return withUnsafePointer(to: &systemInfo.machine) {

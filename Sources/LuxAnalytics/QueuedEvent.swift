@@ -1,18 +1,18 @@
 import Foundation
 
 /// Wrapper for queued events with metadata for retry and TTL management
-public struct QueuedEvent: Codable, Sendable {
-    public let event: AnalyticsEvent
-    public let queuedAt: Date
-    public var retryCount: Int
-    public var lastRetryAt: Date?
-    public var lastAttemptAt: Date?
+struct QueuedEvent: Codable, Sendable {
+    let event: AnalyticsEvent
+    let queuedAt: Date
+    var retryCount: Int
+    var lastRetryAt: Date?
+    var lastAttemptAt: Date?
     /// Earliest time this event may be sent again, after a failed attempt.
     /// Nil for an event that has never failed. Decodes as nil from queues
     /// persisted before this field existed.
-    public var notBefore: Date?
+    var notBefore: Date?
 
-    public init(event: AnalyticsEvent) {
+    init(event: AnalyticsEvent) {
         self.event = event
         self.queuedAt = Date()
         self.retryCount = 0

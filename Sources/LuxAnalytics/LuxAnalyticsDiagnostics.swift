@@ -45,8 +45,8 @@ public struct LuxAnalyticsMetrics: Codable, Sendable {
 }
 
 /// Diagnostics manager for monitoring SDK health
-public actor LuxAnalyticsDiagnostics {
-    public static let shared = LuxAnalyticsDiagnostics()
+actor LuxAnalyticsDiagnostics {
+    static let shared = LuxAnalyticsDiagnostics()
 
     // Metrics tracking
     private var totalEventsSent = 0
@@ -114,7 +114,7 @@ public actor LuxAnalyticsDiagnostics {
 
     // MARK: - Metrics Retrieval
 
-    public func getMetrics() async -> LuxAnalyticsMetrics {
+    func getMetrics() async -> LuxAnalyticsMetrics {
         let queueStats = await LuxAnalyticsQueue.shared.getQueueStats()
 
         let networkStats = LuxAnalyticsMetrics.NetworkStats(
@@ -164,7 +164,7 @@ public actor LuxAnalyticsDiagnostics {
         )
     }
 
-    public func reset() {
+    func reset() {
         totalEventsSent = 0
         totalEventsFailed = 0
         totalBatchesSent = 0

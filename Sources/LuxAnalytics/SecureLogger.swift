@@ -8,10 +8,10 @@ import os.log
 private let debugLoggingFlag = Atomic<Bool>(false)
 
 /// Secure logger that automatically redacts sensitive information
-public struct SecureLogger: Sendable {
+struct SecureLogger: Sendable {
 
     /// Update the cached debug logging flag
-    public static func updateDebugLogging(_ enabled: Bool) {
+    static func updateDebugLogging(_ enabled: Bool) {
         debugLoggingFlag.store(enabled, ordering: .relaxed)
     }
 
@@ -21,7 +21,7 @@ public struct SecureLogger: Sendable {
     }
 
     /// Log categories
-    public enum Category {
+    enum Category {
         case general
         case network
         case queue
@@ -45,7 +45,7 @@ public struct SecureLogger: Sendable {
     }
 
     /// Log levels
-    public enum Level {
+    enum Level {
         case debug
         case info
         case warning
@@ -90,7 +90,7 @@ public struct SecureLogger: Sendable {
     ]
 
     /// Log a message with automatic redaction
-    public static func log(
+    static func log(
         _ message: String,
         category: Category = .general,
         level: Level = .debug,
@@ -115,7 +115,7 @@ public struct SecureLogger: Sendable {
     }
 
     /// Redact sensitive information from a string
-    public static func redact(_ string: String) -> String {
+    static func redact(_ string: String) -> String {
         var result = string
 
         for (pattern, replacement) in redactionPatterns {
@@ -137,7 +137,7 @@ public struct SecureLogger: Sendable {
 
 extension PIIFilter {
     /// Filter a dictionary using SecureLogger's redaction
-    public static func filter(_ dictionary: [String: String]) -> [String: String] {
+    static func filter(_ dictionary: [String: String]) -> [String: String] {
         return dictionary.mapValues { SecureLogger.redact($0) }
     }
 }

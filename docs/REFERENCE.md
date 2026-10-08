@@ -280,6 +280,24 @@ public enum LuxAnalyticsVersion {
 
 `LuxAnalyticsDebug` writes to the unified log at notice level. `LuxAnalyticsVersion.fullVersion` is `"LuxAnalytics/1.1.0"`, which the SDK also sends as its `User-Agent`.
 
-## Other public symbols
+## Defaults
 
-Some types the SDK uses internally are also public: `LuxAnalyticsQueue`, `QueuedEvent`, `CircuitBreaker`, `AsyncTimer`, `SecureLogger`, `BackgroundTaskManager`, `AppAnalyticsContext`, `LuxAnalyticsDiagnostics`, `LuxAnalyticsDefaults`, the `LuxAnalytics.notifyEvent…` functions, and `UIDevice.modelCode()`. They aren't covered by these docs. Calling them can interfere with the SDK (dequeuing events, for example, removes them without sending), so don't depend on them.
+```swift interface
+public enum LuxAnalyticsDefaults {
+  public static let autoFlushInterval: Double
+  public static let maxQueueSize: Int
+  public static let batchSize: Int
+  public static let debugLogging: Bool
+  public static let requestTimeout: Double
+  public static let maxQueueSizeHard: Int
+  public static let eventTTL: Double
+  public static let maxRetryAttempts: Int
+  public static let overflowStrategy: QueueOverflowStrategy
+  public static let compressionEnabled: Bool
+  public static let compressionThreshold: Int
+}
+```
+
+The default value of each `LuxAnalyticsConfiguration` option; the values are listed in [Configuration](CONFIGURATION.md#options).
+
+Everything else in the SDK (the queue, logger, circuit breaker, background task manager and so on) is internal.

@@ -10,20 +10,20 @@ import UIKit
 
 /// Manages background task scheduling for analytics
 @MainActor
-public final class BackgroundTaskManager {
+final class BackgroundTaskManager {
 
     #if os(iOS)
     /// Background task identifier
-    public static let taskIdentifier = "com.luxardolabs.LuxAnalytics.flush"
+    static let taskIdentifier = "com.luxardolabs.LuxAnalytics.flush"
     #endif
 
     /// Shared instance
-    public static let shared = BackgroundTaskManager()
+    static let shared = BackgroundTaskManager()
 
     private init() {}
 
     /// Register background tasks (call from AppDelegate)
-    public func registerBackgroundTasks() {
+    func registerBackgroundTasks() {
         #if os(iOS)
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: Self.taskIdentifier,
@@ -35,7 +35,7 @@ public final class BackgroundTaskManager {
     }
 
     /// Schedule a background task
-    public func scheduleBackgroundFlush() {
+    func scheduleBackgroundFlush() {
         #if os(iOS)
         let request = BGProcessingTaskRequest(identifier: Self.taskIdentifier)
         request.requiresNetworkConnectivity = true
@@ -53,7 +53,7 @@ public final class BackgroundTaskManager {
     }
 
     /// Cancel pending background tasks
-    public func cancelBackgroundTasks() {
+    func cancelBackgroundTasks() {
         #if os(iOS)
         BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.taskIdentifier)
         #endif
@@ -86,14 +86,14 @@ extension BackgroundTaskManager {
     /// Register the background flush task and submit its first request. Call it before
     /// the app finishes launching; the identifier must be in the app's
     /// `BGTaskSchedulerPermittedIdentifiers`.
-    public func setupBackgroundHandling() {
+    func setupBackgroundHandling() {
         registerBackgroundTasks()
         // The handler reschedules itself, but something has to submit the first request.
         scheduleBackgroundFlush()
     }
 
     /// Run a simple background task with UIApplication beginBackgroundTask
-    public func runBackgroundTask(_ work: @escaping () async -> Void) async {
+    func runBackgroundTask(_ work: @escaping () async -> Void) async {
         #if canImport(UIKit)
         var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
 
