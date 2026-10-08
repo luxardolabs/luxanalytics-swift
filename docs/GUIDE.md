@@ -82,7 +82,7 @@ func trackPurchase(plan: String, seats: Int, trial: Bool) async throws {
 - **Metadata is `[String: String]`.** The server stores a string-to-string map, so convert numbers and booleans yourself.
 - **`track` doesn't send anything.** It adds the event to the on-device queue; see [When events are sent](#when-events-are-sent).
 - **It throws** `analyticsDisabled` if the user has opted out (see [Opting out](#opting-out)), and `notInitialized` if no configuration is set.
-- **It throws `invalidEvent`, and queues nothing,** for an event the server would reject: a blank name, a name, user id or session id longer than 255 characters (Unicode code points), or a NUL character in the name, ids or metadata. The server rejects a whole batch for one invalid event, so catching it here keeps one bad event from losing the others sent with it.
+- **It throws `invalidEvent`, and queues nothing,** for an event the server would reject: a blank name (the server also trims the control characters U+001C–U+001F), a name, user id or session id longer than 255 characters (Unicode code points), or a NUL character in the name, ids or metadata. The server rejects a whole batch for one invalid event, so catching it here keeps one bad event from losing the others sent with it.
 
 Each event also records:
 
@@ -163,9 +163,9 @@ A flush is skipped, and events stay queued, when:
 | Server response | Result |
 |---|---|
 | 2xx | Sent. Removed from the queue. |
-| 429 Too Many Requests | Kept and retried. Doesn't count against the circuit breaker. |
+| 429 Too Many Requests | Kept, in order, and sent again once `Retry-After` has passed (or on the next flush). It isn't a failed attempt: it doesn't count against the retry limit or the circuit breaker. |
 | 408, 5xx, or a network error | Kept and retried, and counts against the circuit breaker. |
-| 413 Payload Too Large | The batch is over the server's 10 MB body limit: its events go back on the queue unchanged, and later flushes send half as many at a time. A single event over the limit is dropped. |
+| 413 Payload Too Large | The batch is over the server's 10 MB body limit: its events go back on the queue unchanged, and later flushes send half as many at a time, growing back after each accepted batch. A single event over the limit is dropped. |
 | Any other 4xx (400, 401, 404, 422, …) | Dropped: retrying would fail the same way. |
 
 A retried event waits 2ⁿ seconds after its n-th failure (±25% jitter, at most 5 minutes) before it is sent again. It is retried up to `maxRetryAttempts` times (default 5, so six attempts in all), then dropped and reported as `eventsAbandoned`. A `Retry-After` header (seconds or an HTTP date, capped at one hour) holds every flush to that server until it passes.

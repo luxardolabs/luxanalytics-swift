@@ -38,6 +38,12 @@ First release of the `luxanalytics-swift` repository, which starts a new single-
 - `AnalyticsActor` no longer needs `@preconcurrency import Foundation`: observer tokens cross into the actor in a documented `@unchecked Sendable` wrapper
 
 ### Fixed
+- **A queue saved by SDK 1.0.x was lost when it was migrated.** Moving the old plaintext queue to the encrypted store saved an empty queue and deleted the old copy, so quitting before the next event lost every migrated event. The migrated events are now what gets saved, and the old copy is deleted only after the encrypted save succeeds
+- **Rate-limited events were eventually abandoned.** A 429 counted as a failed attempt, so six in a row abandoned the events, though the server's contract is "retry after the reset". A 429 now puts the batch back in order without spending the retry limit
+- Event names made only of the control characters U+001C–U+001F passed `track`'s check, but the server's trim removes them too, so one such event made the server reject (422) its whole batch. `track` now treats them as blank
+- After a 413, the smaller batch size never recovered for the rest of the session. It now doubles back after each accepted batch, and resets once the oversized event is dropped
+- Events put back on the queue after a 413 or 429 now respect `maxQueueSizeHard`
+- With `debugLogging` on, `setUser` and `setSession` logged the raw id; the log now only says whether one is set
 - **A batch over the server's body limit is split, not dropped.** The server answers 413 for a body over 10 MB (checked after decompression too), and its event format says to split the batch; the SDK dropped it like any other 4xx. Now the events go back to the head of the queue unchanged and later flushes send half as many; only a single event over the limit is dropped
 - **One invalid event no longer loses its whole batch.** The server rejects a batch with 422 if any event in it is invalid, and the SDK drops a batch on 4xx, so an event with a blank name took up to 49 valid events with it. `track` now checks the server's rules and throws the new `LuxAnalyticsError.invalidEvent` instead of queueing such an event: a blank name, a name, user id or session id over 255 code points, or a NUL character in them or in the metadata
 - A flush never sends more than the server's 1,000-event batch limit, even when `batchSize` is larger

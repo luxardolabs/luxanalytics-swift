@@ -2,7 +2,7 @@
 # Run Tests/HostApp on the iOS Simulator: checks that need a real app (Keychain, relaunch,
 # reinstall, lifecycle notifications, BGTaskScheduler). Builds the app from the SDK's
 # sources with swiftc, embeds simulator entitlements the way Xcode does (a __TEXT,
-# __entitlements section), then runs three phases: first launch, relaunch, and after
+# __entitlements section), then runs five phases: legacy-queue migration and its relaunch, first launch, relaunch, and after
 # uninstall + reinstall. Fails on any FAIL line, or if a phase doesn't report DONE. A check
 # that can't run in this environment reports SKIP with its reason, counted separately.
 #   LUXANALYTICS_HOST_DEVICE  simulator name or UDID (default: iPhone 17 Pro)
@@ -58,6 +58,8 @@ run_phase() {
 
 xcrun simctl uninstall "$udid" "$bundle_id" 2>/dev/null || true
 xcrun simctl install "$udid" "$app"
+out_migrate=$(run_phase migrate)
+out_migrated=$(run_phase migrated)
 out_first=$(run_phase first)
 device_id=$(sed -n 's/^HOSTCHECK DEVICE_ID //p' <<<"$out_first")
 out_relaunch=$(run_phase relaunch "$device_id")
@@ -65,14 +67,14 @@ xcrun simctl uninstall "$udid" "$bundle_id"
 xcrun simctl install "$udid" "$app"
 out_reinstall=$(run_phase reinstall "$device_id")
 
-all=$(printf '%s\n%s\n%s\n' "$out_first" "$out_relaunch" "$out_reinstall")
+all=$(printf '%s\n%s\n%s\n%s\n%s\n' "$out_migrate" "$out_migrated" "$out_first" "$out_relaunch" "$out_reinstall")
 grep -E '^HOSTCHECK (PASS|FAIL|SKIP)' <<<"$all" | sed -e 's/^HOSTCHECK PASS/   ✅/' -e 's/^HOSTCHECK FAIL/   ❌/' -e 's/^HOSTCHECK SKIP/   ⏭ /'
 done_count=$(grep -c '^HOSTCHECK DONE' <<<"$all" || true)
 fail_count=$(grep -c '^HOSTCHECK FAIL' <<<"$all" || true)
 pass_count=$(grep -c '^HOSTCHECK PASS' <<<"$all" || true)
 skip_count=$(grep -c '^HOSTCHECK SKIP' <<<"$all" || true)
-if [ "$done_count" != 3 ] || [ "$fail_count" != 0 ]; then
-  echo "🔴 host-check: $fail_count failed, $pass_count passed, $done_count/3 phases finished"
+if [ "$done_count" != 5 ] || [ "$fail_count" != 0 ]; then
+  echo "🔴 host-check: $fail_count failed, $pass_count passed, $done_count/5 phases finished"
   exit 1
 fi
-echo "🟢 host-check: $pass_count checks passed across 3 phases, $skip_count skipped (see ⏭ for why; a skip is not a pass)"
+echo "🟢 host-check: $pass_count checks passed across 5 phases, $skip_count skipped (see ⏭ for why; a skip is not a pass)"

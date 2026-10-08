@@ -23,7 +23,7 @@ How to build, test, check and release the SDK. For contributor expectations, see
 | `make docs-check` | Compile every ` ```swift ` block in `README.md` and `docs/` against the SDK as an app would, and check every ` ```swift interface ` listing against the compiler's public interface. |
 | `make test` | The test suite on the iOS Simulator (default `iPhone 17 Pro`; set `LUXANALYTICS_TEST_DEST` to change it). |
 | `make integration` | The test suite, plus tests that send real requests to the dev server. |
-| `make host-check` | Build `Tests/HostApp` from the SDK sources and run it on the Simulator through three launches (first launch, relaunch, uninstall and reinstall). Set `LUXANALYTICS_HOST_DEVICE` to choose the simulator. |
+| `make host-check` | Build `Tests/HostApp` from the SDK sources and run it on the Simulator through five launches (migrating a queue saved by SDK 1.0.x and relaunching, then first launch, relaunch, uninstall and reinstall). Set `LUXANALYTICS_HOST_DEVICE` to choose the simulator. |
 | `make ios-format` | Rewrite sources to the canonical format (swift-format). |
 
 ## Local settings

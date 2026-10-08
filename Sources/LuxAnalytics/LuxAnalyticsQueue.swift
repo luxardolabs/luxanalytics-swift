@@ -37,7 +37,13 @@ actor LuxAnalyticsQueue {
         get {
             if !isLoaded {
                 isLoaded = true
-                queueCache = (loadQueue() ?? []) + queueCache
+                let loaded = loadQueue()
+                queueCache = loaded.events + queueCache
+                // A pre-encryption queue is re-saved encrypted; its old copy is deleted only once
+                // that save has succeeded, so a failed save never loses it.
+                if loaded.fromLegacyStore, saveQueue() {
+                    userDefaults.removeObject(forKey: Self.legacyKey)
+                }
             }
             return queueCache
         }
@@ -138,37 +144,37 @@ actor LuxAnalyticsQueue {
 
     // MARK: - Persistence
 
-    private func loadQueue() -> [QueuedEvent]? {
-        // Try to load encrypted queue first
+    /// Where a queue from before encryption was kept.
+    static let legacyKey = "com.luxardolabs.LuxAnalytics.eventQueue"
+
+    /// The persisted queue: the encrypted store, or else the legacy plaintext one (which the
+    /// `events` getter migrates once it has merged the result).
+    private func loadQueue() -> (events: [QueuedEvent], fromLegacyStore: Bool) {
         if let encryptedData = userDefaults.data(forKey: queueKey),
             let decrypted = QueueEncryption.decrypt(encryptedData),
             let events = try? JSONDecoder().decode([QueuedEvent].self, from: decrypted)
         {
-            return events
+            return (events, false)
         }
-
-        // Fall back to legacy unencrypted queue
-        let legacyKey = "com.luxardolabs.LuxAnalytics.eventQueue"
-        if let data = userDefaults.data(forKey: legacyKey),
+        if let data = userDefaults.data(forKey: Self.legacyKey),
             let events = try? JSONDecoder().decode([QueuedEvent].self, from: data)
         {
-            // Migrate to encrypted storage
-            saveQueue()
-            userDefaults.removeObject(forKey: legacyKey)
-            return events
+            return (events, true)
         }
-
-        return nil
+        return ([], false)
     }
 
-    private func saveQueue() {
+    /// Persist the queue, encrypted. Returns false if it couldn't be saved (no Keychain key).
+    @discardableResult
+    private func saveQueue() -> Bool {
         do {
             let data = try JSONEncoder().encode(events)
-            if let encrypted = QueueEncryption.encrypt(data) {
-                userDefaults.set(encrypted, forKey: queueKey)
-            }
+            guard let encrypted = QueueEncryption.encrypt(data) else { return false }
+            userDefaults.set(encrypted, forKey: queueKey)
+            return true
         } catch {
             SecureLogger.log("Failed to save queue: \(error)", category: .queue, level: .error)
+            return false
         }
     }
 
@@ -204,9 +210,37 @@ actor LuxAnalyticsQueue {
         batchSizeCap = max(1, min(batchSizeCap, limit))
     }
 
-    /// Put events back at the head of the queue, unchanged: a batch that was split, not failed.
+    /// After a batch is accepted, double the cap back toward no limit, so one oversized batch
+    /// doesn't throttle the rest of the session.
+    func relaxBatchSizeCap() {
+        let (doubled, overflow) = batchSizeCap.multipliedReportingOverflow(by: 2)
+        batchSizeCap = overflow ? Int.max : doubled
+    }
+
+    func resetBatchSizeCap() {
+        batchSizeCap = Int.max
+    }
+
+    /// Put events back at the head of the queue, unchanged (a batch that was split or rate
+    /// limited, not failed), then apply the hard limit: events tracked while the batch was out
+    /// may have filled the queue.
     func returnToFront(_ returned: [QueuedEvent]) {
         events.insert(contentsOf: returned, at: 0)
+        let excess = events.count - maxSizeHard
+        if excess > 0 {
+            switch overflowStrategy {
+            case .dropOldest:
+                events.removeFirst(excess)
+                notifyDropped(excess, reason: .dropOldest)
+            case .dropNewest:
+                events.removeLast(excess)
+                notifyDropped(excess, reason: .dropNewest)
+            case .dropAll:
+                let count = events.count
+                events.removeAll()
+                notifyDropped(count, reason: .dropAll)
+            }
+        }
         saveQueue()
     }
 

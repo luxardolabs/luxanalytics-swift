@@ -244,44 +244,7 @@ extension LuxAnalytics {
                 await GlobalCircuitBreaker.shared.deferRequests(
                     for: config.apiURL, until: Date().addingTimeInterval(retryAfter))
             }
-            switch Self.outcome(forStatus: statusCode) {
-            case .sent:
-                await handleSent(events, config: config)
-            case .tooLarge where events.count > 1:
-                // 413: the body is over the server's size limit. The event format says to split
-                // the batch: put the events back where they were and send half as many at a time.
-                await analyticsActor.debugLog("Batch of \(events.count) too large (413); splitting")
-                await LuxAnalyticsQueue.shared.returnToFront(events)
-                await LuxAnalyticsQueue.shared.capBatchSize(at: events.count / 2)
-            case .tooLarge:
-                // A single event over the limit can never be sent.
-                let error = Self.serverError(statusCode: statusCode, body: body)
-                await analyticsActor.debugLog("Event too large to send (413): \(error)")
-                for queuedEvent in events {
-                    await LuxAnalytics.notifyEventsFailed([queuedEvent.event], error: error)
-                }
-                await LuxAnalyticsDiagnostics.shared.recordEventsFailed(count: events.count, error: error)
-                await LuxAnalyticsDiagnostics.shared.recordBatchFailed()
-            case .rateLimited:
-                // The server is up and asked us to slow down: keep the events, and
-                // don't count it against the circuit breaker.
-                let error = Self.serverError(statusCode: statusCode, body: body)
-                await analyticsActor.debugLog("Rate limited: \(error)")
-                await handleRetryableFailure(events, error: error, cause: error, config: config, tripsBreaker: false)
-            case .retry:
-                let error = Self.serverError(statusCode: statusCode, body: body)
-                await analyticsActor.debugLog("Retryable server response: \(error)")
-                await handleRetryableFailure(events, error: error, cause: error, config: config)
-            case .drop:
-                // A retry would fail the same way, so the events are dropped.
-                let error = Self.serverError(statusCode: statusCode, body: body)
-                await analyticsActor.debugLog("Client error: \(error)")
-                for queuedEvent in events {
-                    await LuxAnalytics.notifyEventsFailed([queuedEvent.event], error: error)
-                }
-                await LuxAnalyticsDiagnostics.shared.recordEventsFailed(count: events.count, error: error)
-                await LuxAnalyticsDiagnostics.shared.recordBatchFailed()
-            }
+            await handleResponse(statusCode: statusCode, body: body, events: events, config: config)
         } catch {
             await analyticsActor.debugLog("Failed to send batch: \(error)")
             let luxError = (error as? LuxAnalyticsError) ?? .networkError(error)
@@ -336,6 +299,58 @@ extension LuxAnalytics {
         return (compressed, true)
     }
 
+    /// Act on the server's answer to a batch (see `outcome(forStatus:)`).
+    func handleResponse(
+        statusCode: Int, body: Data, events: [QueuedEvent], config: LuxAnalyticsConfiguration
+    ) async {
+        switch Self.outcome(forStatus: statusCode) {
+        case .sent:
+            await handleSent(events, config: config)
+            await LuxAnalyticsQueue.shared.relaxBatchSizeCap()
+        case .tooLarge where events.count > 1:
+            // 413: the body is over the server's size limit. The event format says to split
+            // the batch: put the events back where they were and send half as many at a time.
+            await analyticsActor.debugLog("Batch of \(events.count) too large (413); splitting")
+            await LuxAnalyticsQueue.shared.returnToFront(events)
+            await LuxAnalyticsQueue.shared.capBatchSize(at: events.count / 2)
+        case .tooLarge:
+            // A single event over the limit can never be sent. It caused the cap, so the cap goes too.
+            await LuxAnalyticsQueue.shared.resetBatchSizeCap()
+            let error = Self.serverError(statusCode: statusCode, body: body)
+            await analyticsActor.debugLog("Event too large to send (413): \(error)")
+            for queuedEvent in events {
+                await LuxAnalytics.notifyEventsFailed([queuedEvent.event], error: error)
+            }
+            await LuxAnalyticsDiagnostics.shared.recordEventsFailed(count: events.count, error: error)
+            await LuxAnalyticsDiagnostics.shared.recordBatchFailed()
+        case .rateLimited:
+            // The server is up and asked us to slow down ("retry after the reset"). Put the
+            // events back where they were: a 429 is not a failed attempt, so it neither
+            // spends the retry budget nor trips the breaker. Retry-After (above) holds flushes.
+            let error = Self.serverError(statusCode: statusCode, body: body)
+            await analyticsActor.debugLog("Rate limited: \(error)")
+            for queuedEvent in events {
+                await LuxAnalytics.notifyEventsFailed([queuedEvent.event], error: error)
+            }
+            await LuxAnalyticsQueue.shared.returnToFront(events)
+            await LuxAnalyticsDiagnostics.shared.recordEventsFailed(count: events.count, error: error)
+            await LuxAnalyticsDiagnostics.shared.recordBatchFailed()
+        case .retry:
+            let error = Self.serverError(statusCode: statusCode, body: body)
+            await analyticsActor.debugLog("Retryable server response: \(error)")
+            await handleRetryableFailure(events, error: error, cause: error, config: config)
+        case .drop:
+            // A retry would fail the same way, so the events are dropped.
+            let error = Self.serverError(statusCode: statusCode, body: body)
+            await analyticsActor.debugLog("Client error: \(error)")
+            for queuedEvent in events {
+                await LuxAnalytics.notifyEventsFailed([queuedEvent.event], error: error)
+            }
+            await LuxAnalyticsDiagnostics.shared.recordEventsFailed(count: events.count, error: error)
+            await LuxAnalyticsDiagnostics.shared.recordBatchFailed()
+        }
+    }
+
     private func handleSent(_ events: [QueuedEvent], config: LuxAnalyticsConfiguration) async {
         await analyticsActor.debugLog("Successfully sent \(events.count) events")
         await GlobalCircuitBreaker.shared.recordSuccess(for: config.apiURL)
@@ -346,19 +361,15 @@ extension LuxAnalytics {
         await LuxAnalyticsDiagnostics.shared.recordBatchSent()
     }
 
-    /// A 5xx, 408, 429 or transport failure: report it and requeue every event that
-    /// still has retries left. Everything but a rate limit also counts against the
-    /// circuit breaker.
+    /// A 5xx, 408 or transport failure: count it against the circuit breaker, report it,
+    /// and requeue every event that still has retries left.
     private func handleRetryableFailure(
         _ events: [QueuedEvent],
         error: LuxAnalyticsError,
         cause: any Error,
         config: LuxAnalyticsConfiguration,
-        tripsBreaker: Bool = true
     ) async {
-        if tripsBreaker {
-            await GlobalCircuitBreaker.shared.recordFailure(for: config.apiURL)
-        }
+        await GlobalCircuitBreaker.shared.recordFailure(for: config.apiURL)
         for queuedEvent in events {
             await LuxAnalytics.notifyEventsFailed([queuedEvent.event], error: error)
         }

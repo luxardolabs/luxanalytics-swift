@@ -21,12 +21,17 @@ public struct AnalyticsEvent: Codable, Sendable {
     /// with Python's `len`, which Swift's `String.count` doesn't match).
     static let maxFieldLength = 255
 
+    /// What the server's Python `str.strip()` removes: Unicode whitespace, plus the information
+    /// separators U+001C-U+001F, which Swift's `whitespacesAndNewlines` doesn't include.
+    static let serverWhitespace = CharacterSet.whitespacesAndNewlines
+        .union(CharacterSet(charactersIn: "\u{1C}\u{1D}\u{1E}\u{1F}"))
+
     /// Why the server would reject this event, or nil if it's valid. Mirrors the server's
     /// EventCreate rules: a name of 1-255 characters that isn't blank, user and session ids of
     /// at most 255, and no NUL character in the name, ids, or metadata keys and values. One
     /// invalid event makes the server reject its whole batch (422), so `track` checks first.
     var validationProblem: String? {
-        if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if name.trimmingCharacters(in: Self.serverWhitespace).isEmpty {
             return "the name is empty"
         }
         let limited = [("name", name), ("user id", userId), ("session id", sessionId)]

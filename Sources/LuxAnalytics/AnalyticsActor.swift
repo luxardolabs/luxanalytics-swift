@@ -30,12 +30,18 @@ actor AnalyticsActor {
 
     func setUser(_ userId: String?) {
         self.currentUserId = userId
-        SecureLogger.log("User set: \(userId ?? "nil")", category: .general, level: .debug)
+        SecureLogger.log(Self.identityLogMessage("User", userId), category: .general, level: .debug)
     }
 
     func setSession(_ sessionId: String?) {
         self.currentSessionId = sessionId
-        SecureLogger.log("Session set: \(sessionId ?? "nil")", category: .general, level: .debug)
+        SecureLogger.log(Self.identityLogMessage("Session", sessionId), category: .general, level: .debug)
+    }
+
+    /// What the debug log says about a user or session id: whether one is set, never the id.
+    /// Redaction only catches pattern-shaped data (emails, UUIDs), not a plain user name.
+    static func identityLogMessage(_ kind: String, _ id: String?) -> String {
+        id == nil ? "\(kind) cleared" : "\(kind) set"
     }
 
     func getUserId() -> String? {
