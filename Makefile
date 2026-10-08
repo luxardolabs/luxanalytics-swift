@@ -56,6 +56,8 @@ test: ## Run the Swift Testing suite on an iOS Simulator
 integration: ## The suite plus real-HTTP tests against the dev server (settings in Makefile.local)
 	@[ -n "$(LUXANALYTICS_DEV_URL)" ] || { echo "LUXANALYTICS_DEV_URL is not set (see Makefile.local.example)"; exit 1; }
 	@[ -n "$(LUXANALYTICS_DEV_DSN)" ] || { echo "LUXANALYTICS_DEV_DSN is not set: needs the dev sdk-integration app (LUXANALYTI-73)"; exit 1; }
-	@TEST_RUNNER_LUXANALYTICS_DEV_URL="$(LUXANALYTICS_DEV_URL)" \
+	@pin=$$(bash scripts/leaf-pin.sh "$(LUXANALYTICS_DEV_URL)") || exit 1; \
+	 TEST_RUNNER_LUXANALYTICS_DEV_URL="$(LUXANALYTICS_DEV_URL)" \
 	 TEST_RUNNER_LUXANALYTICS_DEV_DSN="$(LUXANALYTICS_DEV_DSN)" \
+	 TEST_RUNNER_LUXANALYTICS_DEV_PIN="$$pin" \
 	 bash scripts/build.sh test

@@ -41,6 +41,7 @@ First release of the `luxanalytics-swift` repository, which starts a new single-
 ### Tests
 - Suites that share global singletons are nested under one serialized parent. Before, they raced each other in parallel and failed intermittently
 - The event `id` is pinned as the server's idempotency key: tests check it is sent, unchanged across retries and through queue persistence
+- Certificate pinning is tested against the dev server's real TLS certificate: the right leaf pin connects (with and without chain validation), a wrong pin refuses the connection
 - `PIIFilter` had no tests (0% coverage). Its public API is now covered for each PII kind, for ordinary text it must leave alone, and for metadata keys and values
 - New wire-payload tests: a single event is sent bare, a batch is wrapped in `events`, keys are sorted, and compression produces zlib format (RFC 1950)
 

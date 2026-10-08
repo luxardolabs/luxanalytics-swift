@@ -16,6 +16,17 @@ private enum DevServer {
     static let dsn = ProcessInfo.processInfo.environment["LUXANALYTICS_DEV_DSN"].flatMap {
         $0.isEmpty ? nil : $0
     }
+    /// SHA-256 (base64) of the dev server's leaf certificate, computed by `make integration`
+    /// from the live server, since its Let's Encrypt certificate renews every 90 days.
+    static let leafPin = ProcessInfo.processInfo.environment["LUXANALYTICS_DEV_PIN"].flatMap {
+        $0.isEmpty ? nil : $0
+    }
+
+    /// A DSN the server doesn't know: any HTTP response proves the TLS handshake passed.
+    static func unknownDSN(_ base: String) -> String {
+        base.replacingOccurrences(of: "://", with: "://sdk-integration-unknown-key@")
+            + "/api/v1/events/0000000000000000"
+    }
 
     static func event(_ name: String) -> QueuedEvent {
         QueuedEvent(
@@ -37,13 +48,41 @@ private enum DevServer {
 struct DevServerRejectionTests {
     @Test func unknownCredentialsAreRefusedAndDropped() async throws {
         let base = try #require(DevServer.baseURL)
-        let config = try LuxAnalyticsConfiguration(
-            dsn: base.replacingOccurrences(of: "://", with: "://sdk-integration-unknown-key@")
-                + "/api/v1/events/0000000000000000")
+        let config = try LuxAnalyticsConfiguration(dsn: DevServer.unknownDSN(base))
         let response = try await NetworkTransport.send(
             LuxAnalytics.encodePayload([DevServer.event("rejected")]), deflated: false, config: config)
         #expect([401, 403, 404].contains(response.statusCode), "got \(response.statusCode)")
         #expect(LuxAnalytics.outcome(forStatus: response.statusCode) == .drop)
+    }
+}
+
+@Suite(.enabled(if: DevServer.leafPin != nil, "LUXANALYTICS_DEV_PIN not set; run `make integration`"))
+struct DevServerCertificatePinningTests {
+    private func send(pinning: CertificatePinningConfig) async throws -> NetworkTransport.Response {
+        let base = try #require(DevServer.baseURL)
+        let config = try LuxAnalyticsConfiguration(dsn: DevServer.unknownDSN(base), certificatePinning: pinning)
+        return try await NetworkTransport.send(
+            LuxAnalytics.encodePayload([DevServer.event("pinning")]), deflated: false, config: config)
+    }
+
+    @Test func theRightLeafPinConnects() async throws {
+        let pin = try #require(DevServer.leafPin)
+        let response = try await send(pinning: CertificatePinningConfig(pinnedCertificateHashes: [pin]))
+        #expect(response.statusCode > 0, "an HTTP status means the pinned handshake completed")
+    }
+
+    @Test func theRightLeafPinConnectsWithoutChainValidation() async throws {
+        let pin = try #require(DevServer.leafPin)
+        let response = try await send(
+            pinning: CertificatePinningConfig(pinnedCertificateHashes: [pin], validateChain: false))
+        #expect(response.statusCode > 0)
+    }
+
+    @Test func aWrongPinRefusesTheConnection() async {
+        let wrong = Data(repeating: 0, count: 32).base64EncodedString()
+        await #expect(throws: URLError.self) {
+            _ = try await send(pinning: CertificatePinningConfig(pinnedCertificateHashes: [wrong]))
+        }
     }
 }
 
@@ -120,10 +159,7 @@ extension GlobalStateTests {
         @Test func aRefusedBatchIsDroppedAndRecorded() async throws {
             await LuxAnalyticsTestHelper.reset()
             let base = try #require(DevServer.baseURL)
-            let config = try LuxAnalyticsConfiguration(
-                dsn: base.replacingOccurrences(of: "://", with: "://sdk-integration-unknown-key@")
-                    + "/api/v1/events/0000000000000000",
-                autoFlushInterval: 3600)
+            let config = try LuxAnalyticsConfiguration(dsn: DevServer.unknownDSN(base), autoFlushInterval: 3600)
             try await LuxAnalytics.initialize(with: config)
             defer { Task { await LuxAnalyticsTestHelper.reset() } }
 
