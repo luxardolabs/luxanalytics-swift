@@ -37,13 +37,7 @@ actor LuxAnalyticsQueue {
         get {
             if !isLoaded {
                 isLoaded = true
-                let loaded = loadQueue()
-                queueCache = loaded.events + queueCache
-                // A pre-encryption queue is re-saved encrypted; its old copy is deleted only once
-                // that save has succeeded, so a failed save never loses it.
-                if loaded.fromLegacyStore, saveQueue() {
-                    userDefaults.removeObject(forKey: Self.legacyKey)
-                }
+                queueCache = loadQueue() + queueCache
             }
             return queueCache
         }
@@ -144,24 +138,13 @@ actor LuxAnalyticsQueue {
 
     // MARK: - Persistence
 
-    /// Where a queue from before encryption was kept.
-    static let legacyKey = "com.luxardolabs.LuxAnalytics.eventQueue"
-
-    /// The persisted queue: the encrypted store, or else the legacy plaintext one (which the
-    /// `events` getter migrates once it has merged the result).
-    private func loadQueue() -> (events: [QueuedEvent], fromLegacyStore: Bool) {
-        if let encryptedData = userDefaults.data(forKey: queueKey),
+    /// The persisted queue, decrypted; empty if there is none or it can't be read.
+    private func loadQueue() -> [QueuedEvent] {
+        guard let encryptedData = userDefaults.data(forKey: queueKey),
             let decrypted = QueueEncryption.decrypt(encryptedData),
             let events = JSONCoders.decode([QueuedEvent].self, from: decrypted)
-        {
-            return (events, false)
-        }
-        if let data = userDefaults.data(forKey: Self.legacyKey),
-            let events = JSONCoders.decode([QueuedEvent].self, from: data)
-        {
-            return (events, true)
-        }
-        return ([], false)
+        else { return [] }
+        return events
     }
 
     /// Persist the queue, encrypted. Returns false if it couldn't be saved (no Keychain key).

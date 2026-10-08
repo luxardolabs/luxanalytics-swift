@@ -8,9 +8,6 @@ import UIKit
 // which launches it once per phase and fails on any FAIL line.
 //
 // Phases (the first launch argument):
-//   migrate    a queue saved by SDK <= 1.0.x (plaintext, legacy key) is migrated to the
-//              encrypted store, and the plaintext copy is removed
-//   migrated   relaunch: the migrated events are still there (before 1.1.0 they were lost)
 //   first      fresh install: encryption, persist a queue, reset the device ID,
 //              lifecycle flush, background task registration
 //   relaunch   same install: the queue loads before the first enqueue, device ID kept
@@ -45,8 +42,6 @@ struct HostChecks {
 
     func run() async {
         switch phase {
-        case "migrate": await migrate()
-        case "migrated": await migrated()
         case "first": await first()
         case "relaunch": await relaunch()
         case "reinstall": await reinstall()
@@ -75,28 +70,6 @@ struct HostChecks {
     }
 
     // MARK: - Phases
-
-    private func migrate() async {
-        let legacy = (0..<3).map { QueuedEvent(event: event("legacy-\($0)")) }
-        guard let plaintext = try? JSONEncoder().encode(legacy) else {
-            check(false, "seed a legacy queue", "encode failed")
-            return
-        }
-        // Must run before anything touches the queue: the first access loads (and migrates) it.
-        UserDefaults.standard.removeObject(forKey: "com.luxardolabs.LuxAnalytics.eventQueue.v2")
-        UserDefaults.standard.set(plaintext, forKey: LuxAnalyticsQueue.legacyKey)
-        check(await LuxAnalyticsQueue.shared.queueSize == 3, "legacy queue loaded")
-        check(
-            UserDefaults.standard.data(forKey: LuxAnalyticsQueue.legacyKey) == nil,
-            "plaintext copy removed once the encrypted save succeeded")
-    }
-
-    private func migrated() async {
-        let names = await LuxAnalyticsQueue.shared.dequeue(limit: 100, now: Date()).map(\.event.name)
-        check(
-            names == ["legacy-0", "legacy-1", "legacy-2"],
-            "migrated queue survives a relaunch", "got \(names)")
-    }
 
     private func first() async {
         let plain = Data("queue-encryption-roundtrip".utf8)
