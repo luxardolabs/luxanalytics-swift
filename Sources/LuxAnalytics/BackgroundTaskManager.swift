@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 #if os(iOS)
 import BackgroundTasks
@@ -63,16 +64,16 @@ public final class BackgroundTaskManager {
         // Schedule next background task
         scheduleBackgroundFlush()
 
-        // Create a background task for analytics flush
+        // The flush and the expiration handler race; whichever finishes first completes
+        // the task, exactly once.
+        let completion = TaskCompletion(task)
         let flushTask = Task {
             await LuxAnalytics.flush()
-            task.setTaskCompleted(success: true)
+            completion.complete(success: true)
         }
-
-        // Handle expiration
         task.expirationHandler = {
             flushTask.cancel()
-            task.setTaskCompleted(success: false)
+            completion.complete(success: false)
         }
     }
     #endif
@@ -82,10 +83,13 @@ public final class BackgroundTaskManager {
 
 extension BackgroundTaskManager {
 
-    /// Setup background task handling (call from AppDelegate)
+    /// Register the background flush task and submit its first request. Call it before
+    /// the app finishes launching; the identifier must be in the app's
+    /// `BGTaskSchedulerPermittedIdentifiers`.
     public func setupBackgroundHandling() {
-        // Register background tasks
         registerBackgroundTasks()
+        // The handler reschedules itself, but something has to submit the first request.
+        scheduleBackgroundFlush()
     }
 
     /// Run a simple background task with UIApplication beginBackgroundTask
@@ -131,3 +135,24 @@ extension LuxAnalytics {
         BackgroundTaskManager.shared.setupBackgroundHandling()
     }
 }
+
+#if os(iOS)
+/// Completes a BGTask at most once: BGTask must not be completed twice.
+/// `@unchecked`: BGTask isn't Sendable, but it is only used once, under the Mutex.
+private final class TaskCompletion: @unchecked Sendable {
+    private let done = Mutex(false)
+    private let task: BGTask
+
+    init(_ task: BGTask) {
+        self.task = task
+    }
+
+    func complete(success: Bool) {
+        let first = done.withLock { done in
+            defer { done = true }
+            return !done
+        }
+        if first { task.setTaskCompleted(success: success) }
+    }
+}
+#endif
