@@ -89,15 +89,32 @@ Logging is off unless you set `debugLogging: true` or call `LuxAnalytics.enableD
 
 The SDK bundles `PrivacyInfo.xcprivacy`, which Xcode merges into your app's privacy report:
 
-| Declared | Linked to the user | Tracking | Purposes |
+| Data type | Linked to the user | Used for tracking | Purpose |
 |---|---|---|---|
 | Device ID | No | No | Analytics |
-| Product interaction | Yes | No | Analytics, app functionality |
-| Other usage data | Yes | No | Analytics |
+| Product interaction | No | No | Analytics |
+| Other usage data | No | No | Analytics |
 
-Required-reason API: `UserDefaults` (reason `CA92.1`), the only one the SDK uses.
+`NSPrivacyTracking` is false, with no tracking domains. The required-reason API is `UserDefaults` (reason `CA92.1`), the only one the SDK uses.
 
-If you call `setUser` with an account identifier, events link the device ID and usage data to that account. Review your App Store privacy answers with that in mind; the user ID is data your app supplies, so your app declares it.
+This is how comparable anonymous analytics SDKs declare the same data: TelemetryDeck (product interaction and device ID), Aptabase and PostHog all ship **not linked, not tracking, analytics**. "Not linked" holds because the SDK sends no account data: the device ID is a one-way hash (of `identifierForVendor`, or of a random value after a reset), and nothing the SDK sends ties events to a name, email or account.
+
+## Your App Store privacy answers
+
+In App Store Connect, declare the SDK's data the same way its manifest does:
+
+| Category → data type | Collected | Linked to the user | Used to track | Purpose |
+|---|---|---|---|---|
+| Identifiers → Device ID | Yes | No | No | Analytics |
+| Usage Data → Product Interaction | Yes | No | No | Analytics |
+| Usage Data → Other Usage Data | Yes | No | No | Analytics |
+
+Then add what your app itself passes in:
+
+- **`setUser`**: declare **Identifiers → User ID**, purpose Analytics. If the value is a random ID your app generates (a UUID kept on the device), it's **not linked**. If it's an account ID, email or anything else that identifies a person, it's **linked**, and so is the usage data sent with it, so change those rows to **Yes**.
+- **Event metadata**: whatever personal data you put in it (see above), declared under its own data type.
+
+The SDK sends data only to your own server and shares nothing with third parties, so it doesn't make your app "track" users in Apple's sense.
 
 ## Opting out
 

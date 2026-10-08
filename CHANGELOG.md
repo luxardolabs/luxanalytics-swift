@@ -23,6 +23,7 @@ First release of the `luxanalytics-swift` repository, which starts a new single-
 
 ### Changed
 - License changed from GPL-3.0 to MIT
+- Privacy manifest: Product Interaction and Other Usage Data are declared **not linked** (they were linked, while Device ID was not), and the App Functionality purpose is removed. Every collected type is now not linked, not tracking, purpose Analytics, as comparable anonymous analytics SDKs declare it. [Privacy](docs/PRIVACY.md#your-app-store-privacy-answers) maps this to App Store Connect answers
 - `QueueStats.failedBatchCount` is replaced by `retryingEvents` (queued events waiting to be retried). `failedBatchCount` was always 0: nothing ever recorded a failed batch
 - Repository renamed to `luxardolabs/luxanalytics-swift`; install with `.package(url: "https://github.com/luxardolabs/luxanalytics-swift", from: "1.1.0")`
 - README links to the [server](https://github.com/luxardolabs/luxanalytics) and its event-format spec
