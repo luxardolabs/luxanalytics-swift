@@ -11,7 +11,8 @@ public enum PIIFilter {
     /// Phone number patterns (US and international)
     private static let phonePatterns = [
         #"\b\d{3}[-.]?\d{3}[-.]?\d{4}\b"#,  // US: 123-456-7890
-        #"\b\(\d{3}\)\s*\d{3}[-.]?\d{4}\b"#,  // US: (123) 456-7890
+        // No leading \b: "(" is not a word character, so \b before it never matches after a space.
+        #"\(\d{3}\)\s*\d{3}[-.]?\d{4}\b"#,  // US: (123) 456-7890
         #"\b\+\d{1,3}\s?\d{1,14}\b"#,  // International
         #"\b\d{10,15}\b"#,  // Long numbers
     ]
