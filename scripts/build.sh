@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Build or test the LuxAnalytics package for iOS with xcodebuild (the package is iOS-only, so a
-# host `swift build` would compile for macOS instead). The destination comes from env, never a UDID:
+# Build (library and tests) or test the LuxAnalytics package for iOS with xcodebuild. The
+# package is iOS-only, so a host `swift build` would compile for macOS instead. The destination comes from env, never a UDID:
 #   LUXANALYTICS_DEST       build destination (default: generic/platform=iOS Simulator)
 #   LUXANALYTICS_TEST_DEST  test destination  (default: platform=iOS Simulator,name=iPhone 17 Pro)
 set -euo pipefail
@@ -10,7 +10,7 @@ case "${1:-build}" in
   build)
     xcodebuild -scheme LuxAnalytics \
       -destination "${LUXANALYTICS_DEST:-generic/platform=iOS Simulator}" \
-      build
+      build-for-testing
     ;;
   test)
     xcodebuild -scheme LuxAnalytics \
