@@ -58,6 +58,10 @@ public final class LuxAnalytics: Sendable {
         SecureLogger.updateDebugLogging(configuration.debugLogging)
 
         await LuxAnalyticsStorage.shared.setConfiguration(configuration)
+        await LuxAnalyticsQueue.shared.configure(
+            maxSizeHard: configuration.maxQueueSizeHard,
+            overflowStrategy: configuration.overflowStrategy,
+            eventTTL: configuration.eventTTL)
         let instance = LuxAnalytics(configuration: configuration)
         await LuxAnalyticsStorage.shared.setInstance(instance)
 

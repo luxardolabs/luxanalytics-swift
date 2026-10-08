@@ -13,11 +13,13 @@ First release of the `luxanalytics-swift` repository, which starts a new single-
 - `LuxAnalytics.resetDeviceID()` replaces the device ID with a new random one. The ID lives in the Keychain and otherwise survives reinstalls; this lifecycle is now documented in [Privacy & Security](wiki/Privacy-Security.md#device-identifier)
 
 ### Removed
+- `LuxAnalyticsEvents.notifyEventDropped(_:reason:)` and `notifyEventExpired(_:)`. The first ignored its `reason`; both were internal helpers
 - **Certificate pinning** (`CertificatePinningConfig` and the `certificatePinning:` configuration parameter). It hashed the whole certificate, so every certificate renewal broke the pin, and the only fix was an app update. Apps that want pinning should use App Transport Security's `NSPinnedDomains`: it pins public keys, supports backup and CA pins, and is verified to cover the SDK's requests. See [Pinning Your Own Server](wiki/Privacy-Security.md#pinning-your-own-server)
 - `AnalyticsConfig`: unused public API left over from HMAC authentication. It read `LUX_API_URL`, `LUX_HMAC_SECRET` and `LUX_KEY_ID` from the app's Info.plist and crashed (`fatalError`) when one was missing. Nothing in the SDK or its known adopters used it, and an app bundle can't keep a shared secret. The SDK authenticates with the DSN's public id
 
 ### Changed
 - License changed from GPL-3.0 to MIT
+- `QueueStats.failedBatchCount` is replaced by `retryingEvents` (queued events waiting to be retried). `failedBatchCount` was always 0: nothing ever recorded a failed batch
 - Repository renamed to `luxardolabs/luxanalytics-swift`; install with `.package(url: "https://github.com/luxardolabs/luxanalytics-swift", from: "1.1.0")`
 - README links to the [server](https://github.com/luxardolabs/luxanalytics) and its event-format spec
 - `LuxAnalyticsVersion`, `AsyncTimer` and `LuxAnalyticsDebug` are caseless enums instead of structs. They only ever had static members, so this only affects code that instantiated them, which did nothing
@@ -29,6 +31,9 @@ First release of the `luxanalytics-swift` repository, which starts a new single-
 - `AnalyticsActor` no longer needs `@preconcurrency import Foundation`: observer tokens cross into the actor in a documented `@unchecked Sendable` wrapper
 
 ### Fixed
+- **`maxQueueSizeHard`, `overflowStrategy` and `eventTTL` now take effect.** All three were accepted by `LuxAnalyticsConfiguration` and ignored: the queue had no size limit (an offline device kept growing it, rewriting the whole encrypted queue on every event), and expiry used the default 7 days, only at launch. The hard limit and strategy are applied on every enqueue; the TTL is applied at initialization and before every flush
+- **Events from the previous session could be lost at launch.** The persisted queue was loaded by a `Task` started in the queue's `init`; an `enqueue` that ran first saved a queue holding only the new event, overwriting the saved ones. The queue now loads on first use, before any read or write
+- `eventsDropped` notifications report the strategy that dropped the events; one path always reported `.dropOldest`
 - **Diagnostics now report real numbers.** `totalBatchesSent`, `totalBatchesFailed`, `averagePayloadSize`, `compressionRatio`, `averageFlushDuration` and `averageCompressionTime` were never recorded, so `getMetrics()`/`exportDiagnostics()` always showed 0 (or a 1.0 ratio). The send path records them now; `averagePayloadSize` is the uncompressed JSON size, and `compressionRatio` covers compressed batches only
 - **A 429 (rate limited) no longer drops events.** It was handled like any other 4xx, so the batch was discarded. It is now requeued without counting against the circuit breaker. A 408 is retried too. Other 4xx responses (400, 401, 404, 422) are still dropped, matching the server's ingest errors (server changelog 2026.10.0, LUXANALYTI-61)
 - **Retry backoff now works.** A failed event waits 2^n seconds (±25% jitter, max 5 minutes) before it is resent, and the queue sends ready events around it. Before, `nextRetryDelay()` was never applied and a failed batch went out again on the very next flush. `QueuedEvent` gains `notBefore`; queues persisted by older versions decode with it nil

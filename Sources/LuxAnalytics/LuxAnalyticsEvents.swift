@@ -136,16 +136,3 @@ extension LuxAnalytics {
         EventManager.shared.notify(.eventsExpired(events))
     }
 }
-
-// MARK: - Single Event Convenience Methods
-extension LuxAnalyticsEvents {
-    /// Convenience method for single event drop notification
-    public static func notifyEventDropped(_ event: AnalyticsEvent, reason: String) async {
-        EventManager.shared.notify(.eventsDropped(count: 1, reason: .dropOldest))
-    }
-
-    /// Convenience method for single event expiry notification
-    public static func notifyEventExpired(_ event: AnalyticsEvent) async {
-        EventManager.shared.notify(.eventsExpired([event]))
-    }
-}

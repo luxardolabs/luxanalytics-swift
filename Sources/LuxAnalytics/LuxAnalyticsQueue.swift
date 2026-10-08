@@ -6,7 +6,8 @@ public struct QueueStats: Sendable, Codable {
     public let totalSizeBytes: Int
     public let oldestEventAge: TimeInterval?
     public let newestEventAge: TimeInterval?
-    public let failedBatchCount: Int
+    /// Queued events that have failed at least once and are waiting to be retried.
+    public let retryingEvents: Int
 }
 
 /// Actor-based queue for thread-safe event management with retry logic
@@ -15,39 +16,60 @@ public actor LuxAnalyticsQueue {
     private let queueKey = "com.luxardolabs.LuxAnalytics.eventQueue.v2"
     private let userDefaults: UserDefaults
 
-    /// In-memory cache of the queue
+    /// In-memory cache of the queue. Read it through `events`, which loads the
+    /// persisted queue first.
     private var queueCache: [QueuedEvent] = []
+    private var isLoaded = false
 
-    /// Track failed batch IDs to prevent infinite retries
-    private var failedBatchIds: Set<String> = []
+    /// Limits from the active configuration (see `configure(maxSizeHard:overflowStrategy:eventTTL:)`).
+    private var maxSizeHard = LuxAnalyticsDefaults.maxQueueSizeHard
+    private var overflowStrategy = LuxAnalyticsDefaults.overflowStrategy
+    private var eventTTL = LuxAnalyticsDefaults.eventTTL
 
     private init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
-        // Queue will be loaded on first access
-        self.queueCache = []
-        // Clean expired events on startup
-        Task {
-            await loadAndCleanQueue()
+    }
+
+    /// The queue, loading the persisted events on first use. Loading lazily (rather
+    /// than in a Task started from init) means an enqueue can never run before the
+    /// load and overwrite the previous session's events.
+    private var events: [QueuedEvent] {
+        get {
+            if !isLoaded {
+                isLoaded = true
+                queueCache = (loadQueue() ?? []) + queueCache
+            }
+            return queueCache
+        }
+        set {
+            isLoaded = true
+            queueCache = newValue
         }
     }
 
-    private func loadAndCleanQueue() {
-        self.queueCache = loadQueue() ?? []
-        cleanExpiredEvents(ttlSeconds: LuxAnalyticsDefaults.eventTTL)
+    /// Apply the configuration's queue limits, and drop anything already past its TTL.
+    func configure(maxSizeHard: Int, overflowStrategy: QueueOverflowStrategy, eventTTL: TimeInterval) {
+        self.maxSizeHard = max(1, maxSizeHard)
+        self.overflowStrategy = overflowStrategy
+        self.eventTTL = eventTTL
+        cleanExpiredEvents()
     }
 
     public var queueSize: Int {
-        return queueCache.count
+        return events.count
     }
 
     public func enqueue(_ event: AnalyticsEvent) {
-        let queuedEvent = QueuedEvent(event: event)
-        queueCache.append(queuedEvent)
-        saveQueue()
+        enqueue(QueuedEvent(event: event))
     }
 
+    /// Append an event, applying the overflow strategy when the queue is at its hard limit.
     public func enqueue(_ queuedEvent: QueuedEvent) {
-        queueCache.append(queuedEvent)
+        guard makeRoom() else {
+            notifyDropped(1, reason: .dropNewest)
+            return
+        }
+        events.append(queuedEvent)
         saveQueue()
     }
 
@@ -58,9 +80,10 @@ public actor LuxAnalyticsQueue {
     }
 
     func dequeue(limit: Int, now: Date) -> [QueuedEvent] {
+        cleanExpiredEvents(now: now)
         var eventsToSend: [QueuedEvent] = []
         var remaining: [QueuedEvent] = []
-        for queuedEvent in queueCache {
+        for queuedEvent in events {
             if eventsToSend.count < limit && queuedEvent.isReady(at: now) {
                 eventsToSend.append(queuedEvent)
             } else {
@@ -68,7 +91,7 @@ public actor LuxAnalyticsQueue {
             }
         }
         if !eventsToSend.isEmpty {
-            queueCache = remaining
+            events = remaining
             saveQueue()
         }
         return eventsToSend
@@ -76,56 +99,40 @@ public actor LuxAnalyticsQueue {
 
     // MARK: - Queue Management
 
-    private func cleanExpiredEvents(ttlSeconds: TimeInterval) {
-        let before = queueCache.count
-        let expiredEvents = queueCache.filter { $0.isExpired(ttlSeconds: ttlSeconds) }.map { $0.event }
-        queueCache = queueCache.filter { !$0.isExpired(ttlSeconds: ttlSeconds) }
-        let after = queueCache.count
-
-        if before != after {
-            saveQueue()
-            SecureLogger.log("Cleaned \(before - after) expired events from queue", category: .queue, level: .info)
-            if !expiredEvents.isEmpty {
-                Task {
-                    for event in expiredEvents {
-                        await LuxAnalyticsEvents.notifyEventExpired(event)
-                    }
-                }
-            }
-        }
+    /// Drop events older than the configured TTL and report them as expired.
+    private func cleanExpiredEvents(now: Date = Date()) {
+        let expired = events.filter { now.timeIntervalSince($0.queuedAt) > eventTTL }
+        guard !expired.isEmpty else { return }
+        events.removeAll { now.timeIntervalSince($0.queuedAt) > eventTTL }
+        saveQueue()
+        SecureLogger.log("Dropped \(expired.count) expired events from the queue", category: .queue, level: .info)
+        let expiredEvents = expired.map(\.event)
+        Task { await LuxAnalytics.notifyEventsExpired(expiredEvents) }
     }
 
-    private func handleQueueOverflow(strategy: QueueOverflowStrategy, maxQueueSizeHard: Int) {
-        SecureLogger.log("Queue overflow: \(queueCache.count) events, applying strategy: \(strategy)", category: .queue, level: .warning)
-
-        switch strategy {
-        case .dropOldest:
-            let toRemove = queueCache.count - maxQueueSizeHard + 1
-            if toRemove > 0 {
-                let droppedEvents = Array(queueCache.prefix(toRemove)).map { $0.event }
-                queueCache.removeFirst(toRemove)
-                Task {
-                    for event in droppedEvents {
-                        await LuxAnalyticsEvents.notifyEventDropped(event, reason: "Queue overflow - oldest dropped")
-                    }
-                }
-            }
-
+    /// Make room for one more event under the hard limit.
+    /// - Returns: false when the strategy is `.dropNewest` and the new event should be dropped.
+    private func makeRoom() -> Bool {
+        guard events.count >= maxSizeHard else { return true }
+        SecureLogger.log(
+            "Queue at its limit (\(maxSizeHard) events), applying \(overflowStrategy)", category: .queue, level: .warning)
+        switch overflowStrategy {
         case .dropNewest:
-            // Don't add the new event (it will be dropped by the caller)
-            break
-
+            return false
+        case .dropOldest:
+            let toRemove = events.count - maxSizeHard + 1
+            events.removeFirst(toRemove)
+            notifyDropped(toRemove, reason: .dropOldest)
         case .dropAll:
-            let droppedEvents = queueCache.map { $0.event }
-            queueCache.removeAll()
-            Task {
-                for event in droppedEvents {
-                    await LuxAnalyticsEvents.notifyEventDropped(event, reason: "Queue overflow - all dropped")
-                }
-            }
+            let toRemove = events.count
+            events.removeAll()
+            notifyDropped(toRemove, reason: .dropAll)
         }
+        return true
+    }
 
-        saveQueue()
+    private func notifyDropped(_ count: Int, reason: QueueOverflowStrategy) {
+        Task { await LuxAnalytics.notifyEventsDropped(count: count, reason: reason) }
     }
 
     // MARK: - Persistence
@@ -155,7 +162,7 @@ public actor LuxAnalyticsQueue {
 
     private func saveQueue() {
         do {
-            let data = try JSONEncoder().encode(queueCache)
+            let data = try JSONEncoder().encode(events)
             if let encrypted = QueueEncryption.encrypt(data) {
                 userDefaults.set(encrypted, forKey: queueKey)
             }
@@ -168,34 +175,28 @@ public actor LuxAnalyticsQueue {
 
     public func getQueueStats() -> QueueStats {
         let now = Date()
-        let oldestEvent = queueCache.first
-        let newestEvent = queueCache.last
+        let queued = events
+        let oldestEvent = queued.first
+        let newestEvent = queued.last
         let oldestEventAge = oldestEvent.map { now.timeIntervalSince($0.queuedAt) }
         let newestEventAge = newestEvent.map { now.timeIntervalSince($0.queuedAt) }
 
-        _ = queueCache.filter { queuedEvent in
-            queuedEvent.retryCount < LuxAnalyticsDefaults.maxRetryAttempts
-        }
-        _ = queueCache.filter { queuedEvent in
-            queuedEvent.isExpired(ttlSeconds: LuxAnalyticsDefaults.eventTTL)
-        }
-
         // Calculate total size
-        let totalSizeBytes = queueCache.reduce(0) { total, event in
+        let totalSizeBytes = queued.reduce(0) { total, event in
             total + ((try? JSONEncoder().encode(event).count) ?? 0)
         }
 
         return QueueStats(
-            totalEvents: queueCache.count,
+            totalEvents: queued.count,
             totalSizeBytes: totalSizeBytes,
             oldestEventAge: oldestEventAge,
             newestEventAge: newestEventAge,
-            failedBatchCount: failedBatchIds.count
+            retryingEvents: queued.filter { $0.retryCount > 0 }.count
         )
     }
 
     public func clear() {
-        queueCache.removeAll()
+        events.removeAll()
         saveQueue()
         SecureLogger.log("Queue cleared", category: .queue, level: .info)
     }

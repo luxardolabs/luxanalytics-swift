@@ -425,7 +425,7 @@ extension GlobalStateTests {
             for i in 0..<5 { await LuxAnalyticsQueue.shared.enqueue(makeEvent("e\(i)")) }
             let stats = await LuxAnalyticsQueue.shared.getQueueStats()
             #expect(stats.totalEvents == 5)
-            #expect(stats.failedBatchCount == 0)
+            #expect(stats.retryingEvents == 0)
             if let age = stats.oldestEventAge {
                 #expect(age < 5)
             }
