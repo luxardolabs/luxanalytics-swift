@@ -8,7 +8,8 @@ public enum LuxAnalyticsError: LocalizedError, Equatable, Sendable {
             (.notInitialized, .notInitialized),
             (.analyticsDisabled, .analyticsDisabled):
             return true
-        case (.invalidConfiguration(let lhsMsg), .invalidConfiguration(let rhsMsg)):
+        case (.invalidConfiguration(let lhsMsg), .invalidConfiguration(let rhsMsg)),
+            (.invalidEvent(let lhsMsg), .invalidEvent(let rhsMsg)):
             return lhsMsg == rhsMsg
         case (.queueError(let lhsMsg), .queueError(let rhsMsg)):
             return lhsMsg == rhsMsg
@@ -46,6 +47,10 @@ public enum LuxAnalyticsError: LocalizedError, Equatable, Sendable {
     /// Analytics is disabled
     case analyticsDisabled
 
+    /// The event breaks a rule the server enforces, so it was not queued. The server rejects
+    /// a whole batch for one invalid event, so these are caught in `track`.
+    case invalidEvent(String)
+
     public var errorDescription: String? {
         switch self {
         case .alreadyInitialized:
@@ -64,6 +69,8 @@ public enum LuxAnalyticsError: LocalizedError, Equatable, Sendable {
             return "Queue error: \(message)"
         case .analyticsDisabled:
             return "Analytics is disabled"
+        case .invalidEvent(let message):
+            return "Invalid event: \(message)"
         }
     }
 }

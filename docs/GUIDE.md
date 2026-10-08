@@ -82,6 +82,7 @@ func trackPurchase(plan: String, seats: Int, trial: Bool) async throws {
 - **Metadata is `[String: String]`.** The server stores a string-to-string map, so convert numbers and booleans yourself.
 - **`track` doesn't send anything.** It adds the event to the on-device queue; see [When events are sent](#when-events-are-sent).
 - **It throws** `analyticsDisabled` if the user has opted out (see [Opting out](#opting-out)), and `notInitialized` if no configuration is set.
+- **It throws `invalidEvent`, and queues nothing,** for an event the server would reject: a blank name, a name, user id or session id longer than 255 characters (Unicode code points), or a NUL character in the name, ids or metadata. The server rejects a whole batch for one invalid event, so catching it here keeps one bad event from losing the others sent with it.
 
 Each event also records:
 
@@ -140,7 +141,7 @@ final class SettingsViewController: UIViewController {
 
 ## When events are sent
 
-Events wait in an on-device queue. A **flush** sends the oldest ready events (up to `batchSize`, default 50) in one request. One event is sent on its own; two or more are wrapped as `{"events": [...]}`. Bodies of 1 KB or more are zlib-compressed (`Content-Encoding: deflate`).
+Events wait in an on-device queue. A **flush** sends the oldest ready events (up to `batchSize`, default 50, and never more than the server's limit of 1,000) in one request. One event is sent on its own; two or more are wrapped as `{"events": [...]}`. Bodies of 1 KB or more are zlib-compressed (`Content-Encoding: deflate`).
 
 A flush happens:
 

@@ -42,7 +42,7 @@ public func setUser(_ userId: String?) async
 public func setSession(_ sessionId: String?) async
 ```
 
-- `track` queues the event; it throws `analyticsDisabled` or `notInitialized`.
+- `track` queues the event; it throws `analyticsDisabled`, `notInitialized`, or `invalidEvent`.
 - `trackSanitized` runs `PIIFilter.sanitizeMetadata` over the metadata first.
 - `trackWithRedaction` replaces the named fields with `"[REDACTED]"`.
 - `setUser` and `setSession` apply to later events. Pass nil to clear.
@@ -154,6 +154,7 @@ public enum LuxAnalyticsError : LocalizedError, Equatable, Sendable {
   case encodingError(any Error)
   case queueError(String)
   case analyticsDisabled
+  case invalidEvent(String)
 }
 ```
 
@@ -163,6 +164,7 @@ public enum LuxAnalyticsError : LocalizedError, Equatable, Sendable {
 | `notInitialized` | `track` before a configuration is set |
 | `invalidConfiguration` | Malformed DSN, or no `LuxAnalyticsDSN` in Info.plist |
 | `analyticsDisabled` | `track` while the user has opted out |
+| `invalidEvent` | `track` with an event the server would reject (see [Track events](GUIDE.md#track-events)). The message says which rule. |
 | `serverError` | In `eventsFailed`: the server answered with a non-2xx status. `response` is the body, with sensitive values redacted. |
 | `networkError` | In `eventsFailed`: the request failed (TLS failure, timeout, connection lost), or the batch couldn't be JSON-encoded |
 | `encodingError` | In `eventsFailed`: a batch couldn't be compressed |

@@ -119,6 +119,11 @@ public final class LuxAnalytics: Sendable {
             metadata: merged
         )
 
+        if let problem = event.validationProblem {
+            await analyticsActor.debugLog("Not queuing invalid event: \(problem)")
+            throw LuxAnalyticsError.invalidEvent(problem)
+        }
+
         await analyticsActor.debugLog("Tracking event: \(name) - queuing for batch")
 
         // Always queue events for batching - never send immediately
@@ -161,7 +166,8 @@ public final class LuxAnalytics: Sendable {
             return
         }
 
-        let eventsToSend = await LuxAnalyticsQueue.shared.dequeue(limit: config.batchSize)
+        // The server accepts at most 1,000 events per request, whatever batchSize says.
+        let eventsToSend = await LuxAnalyticsQueue.shared.dequeue(limit: min(config.batchSize, Self.maxEventsPerRequest))
         guard !eventsToSend.isEmpty else {
             await instance.analyticsActor.debugLog("No events to flush")
             return
@@ -266,6 +272,9 @@ extension LuxAnalytics {
             await handleRetryableFailure(events, error: luxError, cause: error, config: config)
         }
     }
+
+    /// The server's BatchEventRequest limit (maxItems).
+    static let maxEventsPerRequest = 1_000
 
     /// What a batch's HTTP status means for its events.
     enum SendOutcome: Equatable {

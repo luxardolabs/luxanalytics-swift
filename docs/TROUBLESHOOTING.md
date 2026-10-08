@@ -33,7 +33,7 @@ func diagnoseDelivery() async {
 - **Events disappear without arriving**: watch `LuxAnalyticsEvents.eventStream` for `eventsFailed`, and for `eventsAbandoned` (events given up on after `maxRetryAttempts` retries). A `serverError` with a 4xx status means the server refused the batch, and those events are dropped:
   - **401 or 403**: the DSN's public id isn't accepted. Check the DSN against your server's dashboard.
   - **404**: the project id doesn't exist on that server.
-  - **422**: an event failed validation, for example an empty name.
+  - **422**: the server rejected the batch. The SDK checks the server's field rules in `track` (it throws `invalidEvent`), so the usual cause is the device clock: the server rejects timestamps more than 60 seconds in the future, which every event from a device whose clock runs fast will have.
   - **429**: rate limited. These are kept and retried, not dropped.
 
 ## Debug logging

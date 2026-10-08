@@ -24,7 +24,7 @@ Your server's dashboard gives you the DSN for each app. A DSN without a host, a 
 |---|---|---|
 | `autoFlushInterval` | `30` s | How often queued events are flushed automatically. |
 | `maxQueueSize` | `500` | `track` triggers a flush when the queue holds this many events. A memory warning triggers one above half of it. |
-| `batchSize` | `50` | The most events sent in one request. Each flush sends one batch. |
+| `batchSize` | `50` | The most events sent in one request; values over the server's limit of 1,000 are capped at 1,000. Each flush sends one batch. |
 | `debugLogging` | `false` | Log to the unified log (subsystem `com.luxardolabs.LuxAnalytics`), with sensitive values redacted. |
 | `requestTimeout` | `60` s | Timeout for each send request. |
 | `maxQueueSizeHard` | `10000` | The queue's hard limit. At the limit, `overflowStrategy` applies. |
