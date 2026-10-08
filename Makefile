@@ -12,7 +12,7 @@ LUXIOS         ?= ../luxios
 
 # The facts handed to the gate (no `#` comments inside the recipe: a `#` line ends make's
 # logical line and silently unsets every fact above it):
-#   APP_SRC    the library target and its tests
+#   APP_SRC    the library target, its tests, and the host-check app
 #   NET_LAYER  the one file allowed to touch URLSession
 #   VIEW_DIRS  none: a library has no views, so the name matches no directory and §2's
 #              view check finds nothing to scan. DESIGN_SYS is unset for the same reason
@@ -21,10 +21,10 @@ LUXIOS         ?= ../luxios
 #   CONTRACT_FACTS  the SDK's request bodies vs the server's /openapi.json. The spec URL
 #              comes from LUXANALYTICS_OPENAPI_URL (Makefile.local); the gate refuses to run
 #              without it rather than skip the stage.
-APP_SRC   := Sources/LuxAnalytics:Tests/LuxAnalyticsTests
+APP_SRC   := Sources/LuxAnalytics:Tests/LuxAnalyticsTests:Tests/HostApp
 NET_LAYER := NetworkTransport.swift
 
-.PHONY: help ios-check ios-format test integration docs-check luxios-pin contract-url
+.PHONY: help ios-check ios-format test integration host-check docs-check luxios-pin contract-url
 
 help: ## Show this help message
 	@echo "LuxAnalytics v$(VERSION)"
@@ -46,6 +46,9 @@ ios-check: luxios-pin contract-url docs-check ## The gate: docs-check, then luxi
 	 CONTRACT_FACTS="scripts/contract_facts.py" \
 	 LUXANALYTICS_OPENAPI_URL="$(LUXANALYTICS_OPENAPI_URL)" \
 	 bash "$(LUXIOS)/scripts/ios-check.sh"
+
+host-check: ## Checks that need a real app on the Simulator: Keychain, relaunch, reinstall, lifecycle
+	@bash scripts/host-check.sh
 
 docs-check: ## Compile every Swift example in README.md and docs/ against the SDK
 	@python3 -I scripts/docs-check.py
