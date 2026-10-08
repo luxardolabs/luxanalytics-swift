@@ -24,7 +24,7 @@ LUXIOS         ?= ../luxios
 APP_SRC   := Sources/LuxAnalytics:Tests/LuxAnalyticsTests
 NET_LAYER := NetworkTransport.swift
 
-.PHONY: help ios-check ios-format test luxios-pin contract-url
+.PHONY: help ios-check ios-format test integration luxios-pin contract-url
 
 help: ## Show this help message
 	@echo "LuxAnalytics v$(VERSION)"
@@ -52,3 +52,10 @@ ios-format: luxios-pin ## Rewrite sources to the canonical luxios style
 
 test: ## Run the Swift Testing suite on an iOS Simulator
 	@bash scripts/build.sh test
+
+integration: ## The suite plus real-HTTP tests against the dev server (settings in Makefile.local)
+	@[ -n "$(LUXANALYTICS_DEV_URL)" ] || { echo "LUXANALYTICS_DEV_URL is not set (see Makefile.local.example)"; exit 1; }
+	@[ -n "$(LUXANALYTICS_DEV_DSN)" ] || { echo "LUXANALYTICS_DEV_DSN is not set: needs the dev sdk-integration app (LUXANALYTI-73)"; exit 1; }
+	@TEST_RUNNER_LUXANALYTICS_DEV_URL="$(LUXANALYTICS_DEV_URL)" \
+	 TEST_RUNNER_LUXANALYTICS_DEV_DSN="$(LUXANALYTICS_DEV_DSN)" \
+	 bash scripts/build.sh test

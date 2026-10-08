@@ -3,3 +3,9 @@
 # The LuxAnalytics server's OpenAPI spec, for the luxios contract stage. Use the dev
 # server (`make up` in the server repo), e.g. https://<dev-host>:4000/openapi.json
 LUXANALYTICS_OPENAPI_URL ?=
+
+# Real-HTTP integration tests (`make integration`) against the dev server.
+# Base URL, e.g. https://<dev-host>:4000
+LUXANALYTICS_DEV_URL ?=
+# DSN of the dev "sdk-integration" app (stored as a LuxPM credential; LUXANALYTI-73)
+LUXANALYTICS_DEV_DSN ?=
