@@ -1,0 +1,5 @@
+# Copy to Makefile.local (untracked) and fill in. Never commit Makefile.local.
+
+# The LuxAnalytics server's OpenAPI spec, for the luxios contract stage. Use the dev
+# server (`make up` in the server repo), e.g. https://<dev-host>:4000/openapi.json
+LUXANALYTICS_OPENAPI_URL ?=

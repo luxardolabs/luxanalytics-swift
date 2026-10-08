@@ -1,6 +1,9 @@
 # LuxAnalytics Swift SDK
 VERSION := $(shell cat VERSION)
 
+# Per-site settings that must not be committed (private hostnames). See Makefile.local.example.
+-include Makefile.local
+
 # iOS conformance standard (luxios), the iOS sibling of luxarch/luxlint/luxaudit.
 # The pin is a committed fact, so it uses `:=` and can't be shadowed by a Makefile.local.
 # The checkout PATH is per-site topology and stays overridable with `?=`.
@@ -15,10 +18,13 @@ LUXIOS         ?= ../luxios
 #              view check finds nothing to scan. DESIGN_SYS is unset for the same reason
 #              and §9 reports itself skipped.
 #   BUILD_CMD  xcodebuild for the iOS Simulator (the package is iOS-only)
+#   CONTRACT_FACTS  the SDK's request bodies vs the server's /openapi.json. The spec URL
+#              comes from LUXANALYTICS_OPENAPI_URL (Makefile.local); the gate refuses to run
+#              without it rather than skip the stage.
 APP_SRC   := Sources/LuxAnalytics:Tests/LuxAnalyticsTests
 NET_LAYER := NetworkTransport.swift
 
-.PHONY: help ios-check ios-format test luxios-pin
+.PHONY: help ios-check ios-format test luxios-pin contract-url
 
 help: ## Show this help message
 	@echo "LuxAnalytics v$(VERSION)"
@@ -29,11 +35,16 @@ luxios-pin: ## Verify the luxios checkout matches LUXIOS_VERSION
 	@test -f "$(LUXIOS)/scripts/ios-check.sh" || { echo "luxios not found at $(LUXIOS) (set LUXIOS=<path to a luxios checkout>)"; exit 1; }
 	@have=$$(cat "$(LUXIOS)/VERSION"); [ "$$have" = "$(LUXIOS_VERSION)" ] || { echo "luxios at $(LUXIOS) is $$have, but this repo pins $(LUXIOS_VERSION) (check out v$(LUXIOS_VERSION) there)"; exit 1; }
 
-ios-check: luxios-pin ## The iOS gate (luxios $(LUXIOS_VERSION)): lint + format + arch + build + contract + decode
+contract-url:
+	@[ -n "$(LUXANALYTICS_OPENAPI_URL)" ] || { echo "LUXANALYTICS_OPENAPI_URL is not set: the contract stage needs the server's /openapi.json (copy Makefile.local.example to Makefile.local)"; exit 1; }
+
+ios-check: luxios-pin contract-url ## The iOS gate (luxios $(LUXIOS_VERSION)): lint + format + arch + build + contract + decode
 	@APP_SRC="$(APP_SRC)" \
 	 NET_LAYER="$(NET_LAYER)" \
 	 VIEW_DIRS="Views" \
 	 BUILD_CMD="bash scripts/build.sh build" \
+	 CONTRACT_FACTS="scripts/contract_facts.py" \
+	 LUXANALYTICS_OPENAPI_URL="$(LUXANALYTICS_OPENAPI_URL)" \
 	 bash "$(LUXIOS)/scripts/ios-check.sh"
 
 ios-format: luxios-pin ## Rewrite sources to the canonical luxios style
