@@ -38,6 +38,9 @@ actor LuxAnalyticsQueue {
             if !isLoaded {
                 isLoaded = true
                 queueCache = loadQueue() + queueCache
+                // Versions before queue encryption kept the queue here in plaintext. It isn't
+                // migrated; delete it so unencrypted events don't stay on disk.
+                userDefaults.removeObject(forKey: Self.plaintextQueueKey)
             }
             return queueCache
         }
@@ -137,6 +140,9 @@ actor LuxAnalyticsQueue {
     }
 
     // MARK: - Persistence
+
+    /// Where versions before queue encryption kept the queue, unencrypted.
+    static let plaintextQueueKey = "com.luxardolabs.LuxAnalytics.eventQueue"
 
     /// The persisted queue, decrypted; empty if there is none or it can't be read.
     private func loadQueue() -> [QueuedEvent] {

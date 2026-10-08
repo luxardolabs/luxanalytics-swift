@@ -8,8 +8,9 @@ import UIKit
 // which launches it once per phase and fails on any FAIL line.
 //
 // Phases (the first launch argument):
-//   first      fresh install: encryption, persist a queue, reset the device ID,
-//              lifecycle flush, background task registration
+//   first      fresh install: a pre-encryption plaintext queue is deleted, encryption,
+//              persist a queue, reset the device ID, lifecycle flush, background task
+//              registration
 //   relaunch   same install: the queue loads before the first enqueue, device ID kept
 //   reinstall  after uninstall + reinstall: device ID kept (Keychain), queue gone
 
@@ -72,6 +73,14 @@ struct HostChecks {
     // MARK: - Phases
 
     private func first() async {
+        // Before anything touches the queue: its first access must delete a pre-encryption
+        // plaintext queue.
+        UserDefaults.standard.set(Data("[]".utf8), forKey: LuxAnalyticsQueue.plaintextQueueKey)
+        _ = await LuxAnalyticsQueue.shared.queueSize
+        check(
+            UserDefaults.standard.data(forKey: LuxAnalyticsQueue.plaintextQueueKey) == nil,
+            "pre-encryption plaintext queue deleted at load")
+
         let plain = Data("queue-encryption-roundtrip".utf8)
         let sealed = QueueEncryption.encrypt(plain)
         check(sealed != nil, "keychain-backed encryption", "encrypt returned nil (no Keychain key)")
