@@ -136,10 +136,7 @@ let config = try LuxAnalyticsConfiguration(
     compressionThreshold: 1024,     // Compress payloads > 1KB
     
     // Development
-    debugLogging: false,            // Enable console logging
-    
-    // Security (Advanced)
-    certificatePinning: nil         // Optional: SSL certificate pinning
+    debugLogging: false             // Enable console logging
 )
 
 try await LuxAnalytics.initialize(with: config)

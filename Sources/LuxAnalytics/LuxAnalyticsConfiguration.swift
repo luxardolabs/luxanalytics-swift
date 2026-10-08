@@ -59,9 +59,6 @@ public struct LuxAnalyticsConfiguration: Sendable {
     /// Minimum payload size for compression
     public let compressionThreshold: Int
 
-    /// Certificate pinning configuration (optional)
-    public let certificatePinning: CertificatePinningConfig?
-
     /// Initializes a new configuration with DSN
     /// - Parameters:
     ///   - dsn: The Data Source Name (DSN) string in format: https://publicId@domain.com/api/v1/events/projectId
@@ -76,7 +73,6 @@ public struct LuxAnalyticsConfiguration: Sendable {
     ///   - overflowStrategy: Strategy when queue is full
     ///   - compressionEnabled: Enable compression for payloads
     ///   - compressionThreshold: Minimum payload size for compression
-    ///   - certificatePinning: Certificate pinning configuration
     /// - Throws: LuxAnalyticsError if DSN is invalid
     public init(
         dsn: String,
@@ -90,8 +86,7 @@ public struct LuxAnalyticsConfiguration: Sendable {
         maxRetryAttempts: Int = LuxAnalyticsDefaults.maxRetryAttempts,
         overflowStrategy: QueueOverflowStrategy = LuxAnalyticsDefaults.overflowStrategy,
         compressionEnabled: Bool = LuxAnalyticsDefaults.compressionEnabled,
-        compressionThreshold: Int = LuxAnalyticsDefaults.compressionThreshold,
-        certificatePinning: CertificatePinningConfig? = nil
+        compressionThreshold: Int = LuxAnalyticsDefaults.compressionThreshold
     ) throws {
         // Parse DSN
         guard let urlComponents = URLComponents(string: dsn),
@@ -130,7 +125,6 @@ public struct LuxAnalyticsConfiguration: Sendable {
         self.overflowStrategy = overflowStrategy
         self.compressionEnabled = compressionEnabled
         self.compressionThreshold = compressionThreshold
-        self.certificatePinning = certificatePinning
     }
 
     /// Initializes configuration from Info.plist

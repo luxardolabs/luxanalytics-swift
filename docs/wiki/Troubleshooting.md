@@ -272,17 +272,8 @@ try await analytics.track("event")
 **Solutions:**
 
 1. **Check server SSL configuration**
-2. **Implement certificate pinning** (for self-signed certificates):
-   ```swift
-   let config = try LuxAnalyticsConfiguration(
-       dsn: "your-dsn",
-       certificatePinning: CertificatePinningConfiguration(
-           certificates: [yourCertificate],
-           enforceOnFailure: true,
-           validateCertificateChain: true
-       )
-   )
-   ```
+2. **Use a certificate from a trusted CA.** Pinning doesn't make a self-signed certificate acceptable. Let's Encrypt is free.
+3. **If your app pins with `NSPinnedDomains`**, check that the server's current key (or CA) matches one of your pins. See [Pinning Your Own Server](Privacy-Security.md#pinning-your-own-server).
 
 ## Performance Issues
 

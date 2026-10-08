@@ -524,68 +524,7 @@ class BandwidthMonitor {
 
 ### TLS and Certificate Validation
 
-```swift
-// LuxAnalytics automatically uses TLS 1.2+ (iOS enforced)
-// Optional certificate pinning for enhanced security
-
-class NetworkSecurityManager {
-    static func configureCertificatePinning() -> LuxAnalyticsConfiguration? {
-        guard let certificateData = loadCertificateFromBundle() else {
-            print("⚠️ Certificate not found in bundle")
-            return nil
-        }
-        
-        let certificate = SecCertificateCreateWithData(nil, certificateData)!
-        
-        let config = try? LuxAnalyticsConfiguration(
-            dsn: "your-dsn",
-            certificatePinning: CertificatePinningConfiguration(
-                certificates: [certificate],
-                enforceOnFailure: true,
-                validateCertificateChain: true
-            )
-        )
-        
-        return config
-    }
-    
-    private static func loadCertificateFromBundle() -> Data? {
-        guard let path = Bundle.main.path(forResource: "analytics-server", ofType: "cer"),
-              let certificateData = NSData(contentsOfFile: path) as Data? else {
-            return nil
-        }
-        
-        return certificateData
-    }
-    
-    static func monitorCertificateValidation() {
-        Task {
-            for await event in LuxAnalyticsEvents.eventStream {
-                switch event {
-                case .eventsFailed(_, let error):
-                    if error.localizedDescription.contains("certificate") {
-                        print("🔒 Certificate validation failed: \(error)")
-                        await handleCertificateValidationFailure()
-                    }
-                    
-                default:
-                    break
-                }
-            }
-        }
-    }
-    
-    private static func handleCertificateValidationFailure() async {
-        print("🔒 Certificate validation failed - checking certificate status")
-        
-        // In production, you might:
-        // 1. Alert monitoring systems
-        // 2. Fall back to standard validation
-        // 3. Notify security team
-        // 4. Queue events for manual review
-    }
-}
-```
+The SDK sends over HTTPS with the system's standard certificate validation (TLS 1.2+ is enforced by iOS). It has no certificate pinning of its own; to pin your server, use App Transport Security's `NSPinnedDomains`, described in [Privacy & Security → Pinning Your Own Server](Privacy-Security.md#pinning-your-own-server).
 
 ## Network Testing and Debugging
 

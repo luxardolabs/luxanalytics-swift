@@ -128,29 +128,48 @@ https://PUBLIC_ID@DOMAIN/api/v1/events/PROJECT_ID
 - **No secrets in URLs**: Public ID is not sensitive
 - **Project isolation**: Events scoped to specific project
 
-### Certificate Pinning (Optional)
+### Pinning Your Own Server
 
-For enhanced security, pin SSL certificates:
+The SDK has no certificate pinning of its own: it uses the system's standard TLS validation. If you run your own server and want to pin it, use **App Transport Security's `NSPinnedDomains`** in your app's Info.plist (iOS 14+). It applies to all of your app's URL Loading System traffic, the SDK's included. That was verified on iOS 26.5: with a wrong pin, the SDK's requests fail with `NSURLErrorSecureConnectionFailed` (-1200).
 
-```swift
-let certificateData = Data(/* Your certificate */)
-let pinnedCertificate = SecCertificateCreateWithData(nil, certificateData)!
+`NSPinnedDomains` pins the certificate's **public key** (an SPKI SHA-256 hash), not the whole certificate, and it can pin your CA as well as your leaf. Compute a hash from your live server:
 
-let config = try LuxAnalyticsConfiguration(
-    dsn: "your-dsn",
-    certificatePinning: CertificatePinningConfiguration(
-        certificates: [pinnedCertificate],
-        enforceOnFailure: true,
-        validateCertificateChain: true
-    )
-)
+```bash
+echo | openssl s_client -connect analytics.example.com:443 -servername analytics.example.com 2>/dev/null \
+  | openssl x509 -pubkey -noout \
+  | openssl pkey -pubin -outform DER \
+  | openssl dgst -sha256 -binary | base64
 ```
 
-**Certificate pinning features**:
-- **Leaf or chain pinning**: Pin specific certificates or entire chain
-- **Hash-based verification**: SHA-256 certificate fingerprints
-- **Automatic validation**: Integrated with URLSession
-- **Fail-safe options**: Configurable behavior on validation failure
+```xml
+<key>NSAppTransportSecurity</key>
+<dict>
+    <key>NSPinnedDomains</key>
+    <dict>
+        <key>analytics.example.com</key>
+        <dict>
+            <key>NSPinnedLeafIdentities</key>
+            <array>
+                <dict>
+                    <key>SPKI-SHA256-BASE64</key>
+                    <string>CURRENT-KEY-HASH=</string>
+                </dict>
+                <dict>
+                    <key>SPKI-SHA256-BASE64</key>
+                    <string>BACKUP-KEY-HASH=</string>
+                </dict>
+            </array>
+        </dict>
+    </dict>
+</dict>
+```
+
+> **Pins ship inside your app.** When the server's key stops matching every pin, installed copies of your app can't send analytics until users install an update, and nothing tells you. Before you pin:
+>
+> - **Pin a backup key** you have generated and stored offline, or pin your CA with `NSPinnedCAIdentities` instead of (or as well as) the leaf.
+> - **Check your certificate tooling.** Certbot, for example, issues a new private key at every renewal by default (its `--reuse-key` option is off unless set), so a leaf pin with no backup breaks at the next renewal, which is every 90 days with Let's Encrypt.
+>
+> If you can't commit to managing keys like this, don't pin: standard TLS validation already rejects certificates that don't chain to a trusted CA.
 
 ### Network Protection
 
@@ -287,15 +306,13 @@ The SDK ships its own privacy manifest, [`Sources/LuxAnalytics/PrivacyInfo.xcpri
 // Development configuration
 let config = try LuxAnalyticsConfiguration(
     dsn: "https://dev-key@dev-server.com/api/v1/events/dev-project",
-    debugLogging: true,
-    certificatePinning: nil  // Allow self-signed certificates
+    debugLogging: true
 )
 #else
 // Production configuration
 let config = try LuxAnalyticsConfiguration(
     dsn: getProductionDSN(),  // From secure storage
-    debugLogging: false,
-    certificatePinning: productionCertificatePinning
+    debugLogging: false
 )
 #endif
 ```

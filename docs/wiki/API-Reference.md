@@ -138,10 +138,7 @@ init(
     compressionThreshold: Int = 1024,
     
     // Development
-    debugLogging: Bool = false,
-    
-    // Security
-    certificatePinning: CertificatePinningConfiguration? = nil
+    debugLogging: Bool = false
 ) throws
 ```
 
@@ -165,7 +162,6 @@ let overflowStrategy: OverflowStrategy
 let compressionEnabled: Bool
 let compressionThreshold: Int
 let debugLogging: Bool
-let certificatePinning: CertificatePinningConfiguration?
 ```
 
 ## Data Types
@@ -300,29 +296,9 @@ These write to the unified log (subsystem `com.luxardolabs.LuxAnalytics`, catego
 
 For queue contents, use `LuxAnalytics.getQueueStats()`. For counters, use `LuxAnalytics.getMetrics()`.
 
-## Certificate Pinning
+## TLS
 
-### CertificatePinningConfiguration
-
-SSL certificate pinning configuration.
-
-```swift
-struct CertificatePinningConfiguration: Sendable {
-    let certificates: [SecCertificate]  // Pinned certificates
-    let enforceOnFailure: Bool          // Fail on pin mismatch
-    let validateCertificateChain: Bool  // Validate full chain
-}
-
-// Example usage
-let config = try LuxAnalyticsConfiguration(
-    dsn: "your-dsn",
-    certificatePinning: CertificatePinningConfiguration(
-        certificates: [yourCertificate],
-        enforceOnFailure: true,
-        validateCertificateChain: true
-    )
-)
-```
+The SDK uses the system's standard TLS validation and has no pinning API. To pin your own server, see [Privacy & Security → Pinning Your Own Server](Privacy-Security.md#pinning-your-own-server).
 
 ## Error Handling Examples
 

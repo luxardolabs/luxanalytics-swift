@@ -13,6 +13,7 @@ First release of the `luxanalytics-swift` repository, which starts a new single-
 - `LuxAnalytics.resetDeviceID()` replaces the device ID with a new random one. The ID lives in the Keychain and otherwise survives reinstalls; this lifecycle is now documented in [Privacy & Security](wiki/Privacy-Security.md#device-identifier)
 
 ### Removed
+- **Certificate pinning** (`CertificatePinningConfig` and the `certificatePinning:` configuration parameter). It hashed the whole certificate, so every certificate renewal broke the pin, and the only fix was an app update. Apps that want pinning should use App Transport Security's `NSPinnedDomains`: it pins public keys, supports backup and CA pins, and is verified to cover the SDK's requests. See [Pinning Your Own Server](wiki/Privacy-Security.md#pinning-your-own-server)
 - `AnalyticsConfig`: unused public API left over from HMAC authentication. It read `LUX_API_URL`, `LUX_HMAC_SECRET` and `LUX_KEY_ID` from the app's Info.plist and crashed (`fatalError`) when one was missing. Nothing in the SDK or its known adopters used it, and an app bundle can't keep a shared secret. The SDK authenticates with the DSN's public id
 
 ### Changed
@@ -41,7 +42,6 @@ First release of the `luxanalytics-swift` repository, which starts a new single-
 ### Tests
 - Suites that share global singletons are nested under one serialized parent. Before, they raced each other in parallel and failed intermittently
 - The event `id` is pinned as the server's idempotency key: tests check it is sent, unchanged across retries and through queue persistence
-- Certificate pinning is tested against the dev server's real TLS certificate: the right leaf pin connects (with and without chain validation), a wrong pin refuses the connection
 - `PIIFilter` had no tests (0% coverage). Its public API is now covered for each PII kind, for ordinary text it must leave alone, and for metadata keys and values
 - New wire-payload tests: a single event is sent bare, a batch is wrapped in `events`, keys are sorted, and compression produces zlib format (RFC 1950)
 
