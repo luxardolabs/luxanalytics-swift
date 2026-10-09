@@ -7,7 +7,9 @@ VERSION := $(shell cat VERSION)
 # iOS conformance standard (luxios), the iOS sibling of luxarch/luxlint/luxaudit.
 # The pin is a committed fact, so it uses `:=` and can't be shadowed by a Makefile.local.
 # The checkout PATH is per-site topology and stays overridable with `?=`.
-LUXIOS_VERSION := 0.9.0
+LUXIOS_VERSION := 0.9.1
+# Public on GitHub: the fleet's private denylist applies to this repo (luxios 0.9.1).
+LUXIOS_VISIBILITY := public
 LUXIOS         ?= ../luxios
 
 # The facts handed to the gate (no `#` comments inside the recipe: a `#` line ends make's

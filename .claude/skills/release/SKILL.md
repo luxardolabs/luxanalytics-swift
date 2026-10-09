@@ -3,7 +3,7 @@ name: release
 description: Cut a release of this iOS repo the same way every time — an SPM package (a vX.Y.Z tag consumers pin) or an app (a TestFlight/App Store build) — reconcile the tracker, write the changelog, meet the gate, tag, publish the GitHub Release, mirror to LuxPM. Follow it end to end; never skip a step.
 ---
 
-<!-- luxios:release-skill asset v1 - DO NOT edit this marker line; it is how luxios's wiring check knows your copy is current. Re-install with `bash $LUXIOS/scripts/install.sh`. -->
+<!-- luxios:release-skill asset v2 - DO NOT edit this marker line; it is how luxios's wiring check knows your copy is current. Re-install with `bash $LUXIOS/scripts/install.sh`. -->
 
 # iOS release ritual
 
@@ -17,7 +17,7 @@ The one runnable checklist for cutting a release of THIS repo. Installed from lu
   - A **package** uses SemVer: SwiftPM resolves `from:` and `exact:` against tags, so MAJOR breaks the public API, MINOR adds to it, PATCH fixes.
   - An **app** uses the fleet's CalVer `YYYY.0M.MICRO`, and its `MARKETING_VERSION` matches `VERSION`. `CURRENT_PROJECT_VERSION`, the build number, goes up on every upload.
 - **Released tags are immutable.** Never move or delete one; cut the next version.
-- **Publishing is the owner's call.** Pushing the tag, the GitHub Release, and an App Store submission all publish outward. Ask before the first push of a repo, and before any push of a public one.
+- **Publishing is the owner's call, and it is checked before it happens.** Pushing the tag, the GitHub Release, and an App Store submission all publish outward and cannot be taken back. Ask before the first push of a repo and before any push of a public one, and run the disclosure check (step 10) first: permission to publish is not a check of what is published.
 
 ## Steps — do every one, in order
 
@@ -32,6 +32,7 @@ The one runnable checklist for cutting a release of THIS repo. Installed from lu
 1. **Ship the artifact. Do not skip this step.**
    - **Package:** the tag IS the artifact; SwiftPM consumers resolve it. Confirm it from a scratch consumer, e.g. `swift package resolve` with `.package(url: …, exact: "X.Y.Z")`.
    - **App:** archive and upload the build with this repo's Mac-native release target. If the repo has none, archive in Xcode (Product › Archive) and upload it with Organizer or Transporter. Confirm the build appears in App Store Connect with this version and its build number.
+1. **Disclosure check, before anything leaves the machine.** `python3 "$LUXIOS/scripts/privacy.py" disclose --remote origin` scans every commit the remote does not have: patches, commit messages, and author and committer identities. It looks for the fleet's private identifiers (the org denylist) and for AI attribution, and it stops red on any hit. Use `--all` when the push replaces the remote's history (a force-push over a public repo), since every commit then becomes public. Also confirm `python3 "$LUXIOS/scripts/privacy.py" tracked-denylist` prints nothing. A hit is fixed by rewriting the history, never by waiving it. The pre-push hook runs the same scan for a repo declared public, but run it here, where the release can still stop.
 1. **Push** the commit and the tag (`git push && git push origin "v$(cat VERSION)"`), once the owner has cleared pushing this repo.
 1. **Publish the GitHub Release.** `gh release create "v$(cat VERSION)" --title "$(cat VERSION)" --notes-file <this version's CHANGELOG section>`, then confirm it with `gh release view`. A tag is not a Release; skipping this leaves `/releases` empty.
 1. **Re-issue the LuxPM sync receipt** (`luxpm_issue_sync_receipt`), written verbatim to `.luxpm-receipt`, then commit and push it. If it says `last_known_commit: none`, drain the commits with `luxpm_link_commits` (each with its `committed_at`) and re-issue.
@@ -40,4 +41,4 @@ The one runnable checklist for cutting a release of THIS repo. Installed from lu
 
 ## Done when
 
-`VERSION` is bumped and the changelog entry is written from the full window. The gate is met. The annotated `vX.Y.Z` tag is pushed. The artifact exists: the tag resolves for a package, and the build is in App Store Connect for an app. The GitHub Release exists, and LuxPM mirrors it with every shipped issue closed. A tag with no artifact or no Release is not a release.
+`VERSION` is bumped and the changelog entry is written from the full window. The gate is met, and the disclosure check is clean on everything published. The annotated `vX.Y.Z` tag is pushed. The artifact exists: the tag resolves for a package, and the build is in App Store Connect for an app. The GitHub Release exists, and LuxPM mirrors it with every shipped issue closed. A tag with no artifact or no Release is not a release.
